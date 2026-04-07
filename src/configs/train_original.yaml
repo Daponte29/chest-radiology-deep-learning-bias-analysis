@@ -1,0 +1,23 @@
+# Experiment 1 — Baseline: train on original (unmodified) CheXpert frontal radiographs.
+# Establishes the performance ceiling before any style-transfer perturbation.
+
+seed: 42
+
+paths:
+  image_root:    src/data/1
+  train_parquet: src/data/train_manifest.parquet
+  valid_parquet: src/data/valid_manifest.parquet
+  output_dir:    results/original/
+
+model:
+  name:        densenet121
+  num_classes: 14
+  pretrained:  true
+
+training:
+  batch_size:    16
+  num_epochs:    10
+  learning_rate: 0.0001
+  weight_decay:  1.0e-5
+  img_size:      224
+  num_workers:   4
