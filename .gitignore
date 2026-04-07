@@ -211,15 +211,12 @@ __marimo__/
 .claude 
 
 # Ignore dataset and large outputs
-data/
-*.pt
-*.pth
-*.ckpt
-*.h5
-*.zip
-*.tar
-*.csv
-*.parquet
-__pycache__/
-*.log
+
+# IDE
 .vscode/
+
+# Ignore dataset and large outputs
+*.xls
+*.xlsx
+*.csv
+*.jpg
