@@ -12,23 +12,29 @@ class CheXpertDataset(Dataset):
     """
 
     DEFAULT_LABELS = [
-        'Enlarged Cardiomediastinum',
-        'Cardiomegaly',
-        'Lung Opacity',
-        'Lung Lesion',
-        'Edema',
-        'Consolidation',
-        'Pneumonia',
-        'Atelectasis',
-        'Pneumothorax',
-        'Pleural Effusion',
-        'Pleural Other',
-        'Fracture',
-        'No Finding',
-        'Support Devices',
+        'Enlarged Cardiomediastinum', # 1
+        'Cardiomegaly', # 2
+        'Lung Opacity', # 3
+        'Lung Lesion',  # 4
+        'Edema',         # 5
+        'Consolidation', # 6
+        'Pneumonia',     # 7
+        'Atelectasis',   # 8
+        'Pneumothorax',  # 9
+        'Pleural Effusion', # 10
+        'Pleural Other', # 11
+        'Fracture',      # 12
+        'No Finding',    # 13
+        'Support Devices', # 14
     ]
 
-    def __init__(self, manifest_path, image_root_dir, transform=None, target_cols=None):
+    def __init__(
+        self,
+        manifest_path,
+        image_root_dir,
+        transform=None,
+        target_cols=None,
+    ):
         """
         Args:
             manifest_path (str): Path to the parquet manifest file.

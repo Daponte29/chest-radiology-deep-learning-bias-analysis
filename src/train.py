@@ -82,7 +82,13 @@ def build_transforms(img_size: int, is_train: bool) -> transforms.Compose:
 # One training epoch
 # ---------------------------------------------------------------------------
 
-def train_one_epoch(model, loader, criterion, optimizer, device):
+def train_one_epoch(
+    model,
+    loader,
+    criterion,
+    optimizer,
+    device,
+):
     model.train()
     total_loss = 0.0
 
@@ -105,7 +111,13 @@ def train_one_epoch(model, loader, criterion, optimizer, device):
 # Validation: loss + AUROC per label
 # ---------------------------------------------------------------------------
 
-def evaluate(model, loader, criterion, device, label_names):
+def evaluate(
+    model,
+    loader,
+    criterion,
+    device,
+    label_names,
+):
     model.eval()
     total_loss  = 0.0
     all_labels  = []

@@ -12,7 +12,7 @@ from PIL import Image
 from unittest.mock import patch, MagicMock
 from torchvision import transforms
 
-from src.data.chexpert_dataset import CheXpertDataset
+from data.chexpert_dataset import CheXpertDataset
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -26,9 +26,12 @@ DEFAULT_LABELS = [
 ]
 
 
-def _make_parquet(tmp_path: Path, rows: int = 5,
-                  label_cols: list[str] | None = None,
-                  extra_cols: dict | None = None) -> Path:
+def _make_parquet(
+    tmp_path: Path,
+    rows: int = 5,
+    label_cols: list[str] | None = None,
+    extra_cols: dict | None = None,
+) -> Path:
     """Write a minimal valid parquet manifest and return its path."""
     cols = label_cols or DEFAULT_LABELS
     data = {"Path": [f"train/patient{i:05d}/study1/view1_frontal.jpg" for i in range(rows)]}
