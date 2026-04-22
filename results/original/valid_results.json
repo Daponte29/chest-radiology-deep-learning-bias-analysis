@@ -1,0 +1,23 @@
+{
+  "checkpoint": "results\\original\\best_model.pth",
+  "epoch": 5,
+  "split": "valid",
+  "auroc_5_competition": 0.806689,
+  "auroc_14_mean": 0.807969,
+  "per_label": {
+    "Enlarged Cardiomediastinum": 0.701355,
+    "Cardiomegaly": 0.86971,
+    "Lung Opacity": 0.731919,
+    "Lung Lesion": 0.801851,
+    "Edema": 0.825425,
+    "Consolidation": 0.743978,
+    "Pneumonia": 0.766663,
+    "Atelectasis": 0.713541,
+    "Pneumothorax": 0.856861,
+    "Pleural Effusion": 0.880792,
+    "Pleural Other": 0.818277,
+    "Fracture": 0.818902,
+    "No Finding": 0.89052,
+    "Support Devices": 0.891772
+  }
+}

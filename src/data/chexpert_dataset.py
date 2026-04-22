@@ -61,7 +61,7 @@ class CheXpertDataset(Dataset):
     def __getitem__(self, idx):
         img_path = self.image_root_dir / self.paths[idx]
         try:
-            image = Image.open(img_path).convert("RGB")
+            image = Image.open(img_path).convert("RGB") # converts to pixel values in [0, 255]
         except FileNotFoundError:
             print(f"Warning: Image not found at {img_path}")
             return torch.zeros((3, 224, 224)), torch.zeros(len(self.target_cols))

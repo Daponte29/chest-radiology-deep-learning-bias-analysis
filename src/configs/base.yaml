@@ -7,6 +7,7 @@ paths:
   image_root:    src/data/1
   train_parquet: src/data/train_manifest.parquet
   valid_parquet: src/data/valid_manifest.parquet
+  test_parquet:  src/data/test_manifest.parquet
   output_dir:    results/baseline/
 
 model:
@@ -18,6 +19,9 @@ training:
   batch_size:    16
   num_epochs:    10
   learning_rate: 0.0001
+  betas:         [0.9, 0.999]
+  eps:           1.0e-8
   weight_decay:  1.0e-5
   img_size:      224
-  num_workers:   4
+  num_workers:   4   # set to 0 on Windows if multiprocessing errors occur
+  amp:           true  # mixed precision (CUDA only; ignored on CPU)

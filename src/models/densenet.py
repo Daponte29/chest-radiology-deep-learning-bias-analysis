@@ -23,7 +23,7 @@ from __future__ import annotations
 
 import torch
 import torch.nn as nn
-import torchvision.models as tv_models
+import torchvision.models as tv_models # tv_models is the pretrained models from torchvision.
 
 
 NUM_CHEXPERT_CLASSES = 14
