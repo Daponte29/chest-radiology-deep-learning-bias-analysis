@@ -95,7 +95,7 @@ def main():
 
     # Dataset & loader
     dataset = CheXpertDataset(
-        manifest_path  = parquet_path,
+        manifest_path  = parquet_path, # The path to the test data needed for object initialization.
         image_root_dir = cfg["paths"]["image_root"],
         transform      = build_transform(t_cfg["img_size"]),
     )

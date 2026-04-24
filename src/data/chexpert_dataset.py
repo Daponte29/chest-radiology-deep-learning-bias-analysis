@@ -30,10 +30,10 @@ class CheXpertDataset(Dataset):
 
     def __init__(
         self,
-        manifest_path,
-        image_root_dir,
-        transform=None,
-        target_cols=None,
+        manifest_path, # Path to the parquet manifest file.
+        image_root_dir, # Root directory where images are stored.
+        transform=None, # Transform pipeline (e.g., data augmentation) to apply to images.
+        target_cols=None, # Label columns to use as targets. Defaults to all 14 CheXpert pathology columns.
     ):
         """
         Args:
@@ -45,7 +45,7 @@ class CheXpertDataset(Dataset):
         """
         self.image_root_dir = Path(image_root_dir)
         self.transform = transform
-        self.target_cols = target_cols or self.DEFAULT_LABELS
+        self.target_cols = target_cols or self.DEFAULT_LABELS # Label attribute for dataset initialization.
 
         print(f"Loading manifest from {manifest_path}...")
         self.df = pl.read_parquet(manifest_path)
@@ -61,7 +61,7 @@ class CheXpertDataset(Dataset):
     def __getitem__(self, idx):
         img_path = self.image_root_dir / self.paths[idx]
         try:
-            image = Image.open(img_path).convert("RGB") # converts to pixel values in [0, 255]
+            image = Image.open(img_path).convert("RGB") # converts to pixel matrix values in [0, 255]
         except FileNotFoundError:
             print(f"Warning: Image not found at {img_path}")
             return torch.zeros((3, 224, 224)), torch.zeros(len(self.target_cols))

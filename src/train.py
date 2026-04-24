@@ -14,7 +14,7 @@ What this script does, step by step:
          - evaluate on validation set (loss + per-label AUROC)
          - step the LR scheduler
          - save best checkpoint (by mean AUROC)
-         - append epoch metrics to training_history.csv
+         - append epoch metrics to training_history.parquet
 
 Usage:
     python -m src.train --config src/configs/train_original.yaml
@@ -25,11 +25,11 @@ import os
 os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"  # Windows: prevents OMP duplicate-library crash
 
 import argparse
-import csv
 import time
 from pathlib import Path
 
 import numpy as np
+import polars as pl
 import torch
 import torch.nn as nn
 import yaml
@@ -295,9 +295,10 @@ def main():
     # ------------------------------------------------------------------
     # Training loop
     # ------------------------------------------------------------------
-    history_path   = output_dir / "training_history.csv"
-    history_fields = ["epoch", "train_loss", "val_loss", "val_auroc_5", "val_auroc_14", "lr"]
+    history_path = output_dir / "training_history.parquet"
+    history_rows = []
 
+    wall_start = time.time()
     for epoch in range(start_epoch, num_epochs + 1):
         t0 = time.time()
 
@@ -344,21 +345,20 @@ def main():
             }, ckpt_path)
             print(f"  ** New best -> {ckpt_path}  (auroc_5={comp_auroc:.4f})")
 
-        # Append row to CSV history (write header only on first row)
-        write_header = not history_path.exists()
-        with open(history_path, "a", newline="") as f:
-            writer = csv.DictWriter(f, fieldnames=history_fields)
-            if write_header:
-                writer.writeheader()
-            writer.writerow({
-                "epoch":        epoch,
-                "train_loss":   round(train_loss, 6),
-                "val_loss":     round(val_loss, 6),
-                "val_auroc_5":  round(comp_auroc, 6),
-                "val_auroc_14": round(mean_auroc, 6),
-                "lr":           current_lr,
-            })
+        history_rows.append({
+            "epoch":        epoch,
+            "train_loss":   round(train_loss, 6),
+            "val_loss":     round(val_loss, 6),
+            "val_auroc_5":  round(comp_auroc, 6),
+            "val_auroc_14": round(mean_auroc, 6),
+            "lr":           current_lr,
+        })
 
+    pl.DataFrame(history_rows).write_parquet(history_path)
+    print(f"Training history: {history_path}")
+
+    total_mins = (time.time() - wall_start) / 60
+    print(f"\nTotal training time: {total_mins:.1f} min")
     print(f"\nTraining complete. Best val AUROC (5-label benchmark): {best_auroc:.4f}")
     print(f"Best checkpoint : {output_dir / 'best_model.pth'}")
     print(f"Training history: {history_path}")
