@@ -41,7 +41,7 @@
 ---
 
 ## 8. Atelectasis
-
+![alt text](image-19.png)  ![alt text](image-20.png) 
 
 ---
 
@@ -51,8 +51,7 @@
 ---
 
 ## 10. Pleural Effusion
-
-
+![alt text](image-21.png)
 ---
 
 ## 11. Pleural Other

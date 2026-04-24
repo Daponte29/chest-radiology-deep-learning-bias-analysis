@@ -1,11 +1,11 @@
-TEXTURE_TESTS = {"gb", "ps"}
-SHAPE_TESTS   = {"ce", "pr"}
+TEXTURE_TESTS = {"ps", "pr"}
+SHAPE_TESTS   = {"gb", "ce"}
 
 BIAS_TYPE = {
-    "gb": "texture",
+    "gb": "shape",
     "ps": "texture",
     "ce": "shape",
-    "pr": "shape",
+    "pr": "texture",
 }
 
 

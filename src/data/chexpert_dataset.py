@@ -51,7 +51,7 @@ class CheXpertDataset(Dataset):
         self.df = pl.read_parquet(manifest_path)
         # Manifest paths are stored as 'CheXpert-v1.0-small/train/...' but images
         # are rooted directly at image_root_dir, so drop the first path component.
-        self.paths = [str(Path(*Path(p).parts[1:])) for p in self.df["Path"].to_list()]
+        self.paths = [str(Path(*Path(p).parts[1:])) for p in self.df["Path"].to_list()] 
         self.targets = self.df.select(self.target_cols).to_numpy().astype("float32")
         print(f"Dataset loaded. Size: {len(self.paths)} images. Targets: {self.target_cols}")
 
