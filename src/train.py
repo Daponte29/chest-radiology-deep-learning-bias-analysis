@@ -1,28 +1,30 @@
 """
 train.py — CheXpert DenseNet Training Script
 =============================================
-Goal: train a DenseNet on CheXpert chest X-rays for multi-label pathology classification.
-
-What this script does, step by step:
+What this script does:
     1. Load config (YAML)
     2. Set random seed for reproducibility
     3. Build train and validation datasets + dataloaders
+       - Optional WeightedRandomSampler for rare-label balancing
+       - Optional smoke-test mode (overfit N images to verify pipeline)
     4. Build DenseNet model (full backbone unfrozen, pretrained ImageNet weights)
-    5. Define loss (BCEWithLogitsLoss), Adam optimizer, cosine LR scheduler
+    5. Define loss (Focal Loss), Adam optimizer, cosine LR scheduler
     6. Loop over epochs:
          - train for one epoch (optional AMP for speed on CUDA)
          - evaluate on validation set (loss + per-label AUROC)
          - step the LR scheduler
-         - save best checkpoint (by mean AUROC)
+         - save best checkpoint (by 5-label competition AUROC)
+         - early stop if val AUROC has not improved for `patience` epochs
          - append epoch metrics to training_history.parquet
 
 Usage:
     python -m src.train --config src/configs/train_original.yaml
     python -m src.train --config src/configs/train_original.yaml --resume results/original/best_model.pth
+    python -m src.train --config src/configs/train_original.yaml --smoke-test 50
 """
 
 import os
-os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"  # Windows: prevents OMP duplicate-library crash
+os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
 
 import argparse
 import time
@@ -34,7 +36,7 @@ import torch
 import torch.nn as nn
 import yaml
 from sklearn.metrics import roc_auc_score
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, WeightedRandomSampler, Subset
 from torchvision import transforms
 from tqdm import tqdm
 
@@ -87,6 +89,59 @@ def build_transforms(img_size: int, is_train: bool) -> transforms.Compose:
         transforms.ToTensor(),
         transforms.Normalize(IMAGENET_MEAN, IMAGENET_STD),
     ])
+
+
+# ---------------------------------------------------------------------------
+# Focal Loss
+# ---------------------------------------------------------------------------
+
+class FocalLoss(nn.Module):
+    """Multi-label focal loss.
+
+    Down-weights easy (confident) predictions so the model focuses on hard,
+    rare-label examples.  gamma=0 reduces to standard BCE.
+    """
+
+    def __init__(self, gamma: float = 2.0):
+        super().__init__()
+        self.gamma = gamma
+
+    def forward(self, logits: torch.Tensor, targets: torch.Tensor) -> torch.Tensor:
+        bce     = nn.functional.binary_cross_entropy_with_logits(
+            logits, targets, reduction="none"
+        )
+        probs   = torch.sigmoid(logits)
+        p_t     = targets * probs + (1 - targets) * (1 - probs)
+        focal_w = (1 - p_t) ** self.gamma
+        return (focal_w * bce).mean()
+
+
+# ---------------------------------------------------------------------------
+# WeightedRandomSampler
+# ---------------------------------------------------------------------------
+
+def build_sampler(dataset: CheXpertDataset) -> WeightedRandomSampler:
+    """Return a sampler that upsamples rare-pathology images.
+
+    For each sample, weight = sum of (N / n_pos_label) for every positive label,
+    where N = total samples and n_pos_label = number of positives for that label.
+    Samples with rare positive labels get higher weight and appear more often.
+    """
+    targets = dataset.targets          # (N, num_classes) float32
+    n       = len(targets)
+    n_pos   = targets.sum(axis=0)     # positives per label
+    n_pos   = np.where(n_pos == 0, 1, n_pos)   # avoid div-by-zero
+    label_weights = n / n_pos          # inverse frequency per label
+
+    # Per-sample weight = sum of label_weights for positive labels
+    sample_weights = (targets * label_weights).sum(axis=1)
+    sample_weights = torch.from_numpy(sample_weights).float()
+
+    return WeightedRandomSampler(
+        weights     = sample_weights,
+        num_samples = n,
+        replacement = True,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -146,10 +201,9 @@ def evaluate(model, loader, criterion, device, label_names):
             all_probs.append(probs)
             all_labels.append(labels.cpu().numpy())
 
-    all_labels = np.vstack(all_labels)  # (N, num_classes)
+    all_labels = np.vstack(all_labels)
     all_probs  = np.vstack(all_probs)
 
-    # Per-label AUROC; skip labels where only one class is present in the batch
     aurocs = []
     for i, name in enumerate(label_names):
         try:
@@ -162,7 +216,6 @@ def evaluate(model, loader, criterion, device, label_names):
     mean_auroc   = float(np.mean(valid_scores)) if valid_scores else float("nan")
     val_loss     = total_loss / len(loader.dataset)
 
-    # CheXpert benchmark: mean AUROC over the 5 official competition labels
     competition_labels = {"Atelectasis", "Cardiomegaly", "Consolidation", "Edema", "Pleural Effusion"}
     comp_scores = [s for n, s in aurocs if n in competition_labels and not np.isnan(s)]
     comp_auroc  = float(np.mean(comp_scores)) if comp_scores else float("nan")
@@ -176,31 +229,28 @@ def evaluate(model, loader, criterion, device, label_names):
 
 def main():
     parser = argparse.ArgumentParser(description="Train DenseNet on CheXpert")
-    parser.add_argument(
-        "--config", default="src/configs/train_original.yaml",
-        help="Path to YAML config file",
-    )
-    parser.add_argument(
-        "--resume", default=None, metavar="CKPT",
-        help="Path to checkpoint (.pth) to resume training from",
-    )
+    parser.add_argument("--config",     default="src/configs/train_original.yaml")
+    parser.add_argument("--resume",     default=None, metavar="CKPT")
+    parser.add_argument("--smoke-test", default=None, type=int, metavar="N",
+                        help="Overfit on N training images to verify the pipeline")
     args = parser.parse_args()
 
     cfg = load_config(args.config)
     set_seed(cfg["seed"])
 
-    # ------------------------------------------------------------------
-    # Device
-    # ------------------------------------------------------------------
+    smoke_test = args.smoke_test is not None
+    if smoke_test:
+        print(f"\n*** SMOKE TEST MODE — {args.smoke_test} images ***\n")
+
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Device      : {device}")
 
     # ------------------------------------------------------------------
-    # Datasets and dataloaders
+    # Datasets
     # ------------------------------------------------------------------
     t_cfg       = cfg["training"]
     img_size    = t_cfg["img_size"]
-    num_workers = t_cfg["num_workers"]
+    num_workers = 0 if smoke_test else t_cfg["num_workers"]
     batch_size  = t_cfg["batch_size"]
     image_root  = cfg["paths"]["image_root"]
 
@@ -215,59 +265,86 @@ def main():
         transform      = build_transforms(img_size, is_train=False),
     )
 
-    train_loader = DataLoader(
-        train_dataset, batch_size=batch_size,
-        shuffle=True,  num_workers=num_workers, pin_memory=True,
-        persistent_workers=(num_workers > 0),
-    )
+    # Smoke test: subset to N images, no sampler
+    if smoke_test:
+        n = min(args.smoke_test, len(train_dataset))
+        train_dataset = Subset(train_dataset, list(range(n)))
+        valid_dataset = Subset(valid_dataset, list(range(min(n, len(valid_dataset)))))
+
+    # ------------------------------------------------------------------
+    # Dataloaders
+    # ------------------------------------------------------------------
+    use_sampler = t_cfg.get("weighted_sampler", True) and not smoke_test
+    if use_sampler:
+        base_ds = train_dataset.dataset if isinstance(train_dataset, Subset) else train_dataset
+        sampler = build_sampler(base_ds)
+        train_loader = DataLoader(
+            train_dataset, batch_size=batch_size, sampler=sampler,
+            num_workers=num_workers, pin_memory=True,
+            persistent_workers=(num_workers > 0),
+        )
+    else:
+        train_loader = DataLoader(
+            train_dataset, batch_size=batch_size, shuffle=True,
+            num_workers=num_workers, pin_memory=True,
+            persistent_workers=(num_workers > 0),
+        )
+
     valid_loader = DataLoader(
-        valid_dataset, batch_size=batch_size,
-        shuffle=False, num_workers=num_workers, pin_memory=True,
+        valid_dataset, batch_size=batch_size, shuffle=False,
+        num_workers=num_workers, pin_memory=True,
         persistent_workers=(num_workers > 0),
     )
 
-    label_names = train_dataset.target_cols
-    num_classes = len(label_names)
+    base_ds      = train_dataset.dataset if isinstance(train_dataset, Subset) else train_dataset
+    label_names  = base_ds.target_cols
+    num_classes  = len(label_names)
     print(f"Train samples: {len(train_dataset):,}")
     print(f"Valid samples: {len(valid_dataset):,}")
     print(f"Labels ({num_classes}): {label_names}")
 
     # ------------------------------------------------------------------
-    # Model  (full backbone unfrozen — all params trainable)
+    # Model
     # ------------------------------------------------------------------
     model = DenseNetClassifier(
         num_classes = num_classes,
         pretrained  = cfg["model"]["pretrained"],
         variant     = cfg["model"]["name"],
     ).to(device)
-
-    total_params = sum(p.numel() for p in model.parameters())
-    print(f"Parameters  : {total_params:,}")
+    print(f"Parameters  : {sum(p.numel() for p in model.parameters()):,}")
 
     # ------------------------------------------------------------------
-    # Loss, optimizer, cosine LR scheduler
+    # Focal loss
     # ------------------------------------------------------------------
-    criterion = nn.BCEWithLogitsLoss()
+    gamma     = t_cfg.get("focal_gamma", 2.0)
+    criterion = FocalLoss(gamma=gamma)
+    print(f"Loss        : FocalLoss (gamma={gamma})")
 
-    betas     = tuple(t_cfg.get("betas", [0.9, 0.999]))
-    eps       = t_cfg.get("eps", 1e-8)
+    # ------------------------------------------------------------------
+    # Optimizer + cosine LR scheduler
+    # ------------------------------------------------------------------
     optimizer = torch.optim.Adam(
         model.parameters(),
         lr           = t_cfg["learning_rate"],
-        betas        = betas,
-        eps          = eps,
+        betas        = tuple(t_cfg.get("betas", [0.9, 0.999])),
+        eps          = t_cfg.get("eps", 1e-8),
         weight_decay = t_cfg["weight_decay"],
     )
-
     num_epochs = t_cfg["num_epochs"]
     scheduler  = torch.optim.lr_scheduler.CosineAnnealingLR(
         optimizer, T_max=num_epochs, eta_min=1e-6,
     )
 
-    # Mixed-precision scaler (CUDA only; skipped on CPU)
     use_amp = device.type == "cuda" and t_cfg.get("amp", True)
     scaler  = torch.cuda.amp.GradScaler() if use_amp else None
     print(f"AMP enabled : {use_amp}")
+
+    # ------------------------------------------------------------------
+    # Early stopping
+    # ------------------------------------------------------------------
+    patience        = t_cfg.get("early_stopping_patience", 3)
+    epochs_no_improv = 0
+    print(f"Early stop  : patience={patience} epochs")
 
     # ------------------------------------------------------------------
     # Output directory
@@ -276,7 +353,7 @@ def main():
     output_dir.mkdir(parents=True, exist_ok=True)
 
     # ------------------------------------------------------------------
-    # Optionally resume from a previous checkpoint
+    # Optionally resume from checkpoint
     # ------------------------------------------------------------------
     start_epoch = 1
     best_auroc  = 0.0
@@ -287,7 +364,6 @@ def main():
         optimizer.load_state_dict(ckpt["optimizer_state_dict"])
         start_epoch = ckpt["epoch"] + 1
         best_auroc  = ckpt.get("val_auroc_5", ckpt.get("val_auroc", 0.0))
-        # Advance scheduler state to match the resumed epoch
         for _ in range(ckpt["epoch"]):
             scheduler.step()
         print(f"Resumed from {args.resume}  (epoch {ckpt['epoch']}, auroc={best_auroc:.4f})")
@@ -297,8 +373,8 @@ def main():
     # ------------------------------------------------------------------
     history_path = output_dir / "training_history.parquet"
     history_rows = []
+    wall_start   = time.time()
 
-    wall_start = time.time()
     for epoch in range(start_epoch, num_epochs + 1):
         t0 = time.time()
 
@@ -317,23 +393,23 @@ def main():
             f"Epoch {epoch:02d}/{num_epochs} | "
             f"train_loss={train_loss:.4f} | "
             f"val_loss={val_loss:.4f} | "
-            f"auroc_5={comp_auroc:.4f} | "   # CheXpert benchmark (5 labels)
-            f"auroc_14={mean_auroc:.4f} | "  # all 14 labels
+            f"auroc_5={comp_auroc:.4f} | "
+            f"auroc_14={mean_auroc:.4f} | "
             f"lr={current_lr:.2e} | "
             f"{elapsed:.0f}s"
         )
 
-        # Per-label AUROC breakdown
         valid_scores = [s for _, s in aurocs if not np.isnan(s)]
         best_label   = max(valid_scores) if valid_scores else float("nan")
         for name, score in aurocs:
             marker = " <--" if score == best_label else ""
             print(f"  {name:<35} {score:.4f}{marker}")
 
-        # Save best checkpoint (tracked by 5-label competition AUROC)
+        # Best checkpoint
         if comp_auroc > best_auroc:
-            best_auroc = comp_auroc
-            ckpt_path  = output_dir / "best_model.pth"
+            best_auroc       = comp_auroc
+            epochs_no_improv = 0
+            ckpt_path        = output_dir / "best_model.pth"
             torch.save({
                 "epoch":                epoch,
                 "model_state_dict":     model.state_dict(),
@@ -344,6 +420,9 @@ def main():
                 "config":               cfg,
             }, ckpt_path)
             print(f"  ** New best -> {ckpt_path}  (auroc_5={comp_auroc:.4f})")
+        else:
+            epochs_no_improv += 1
+            print(f"  No improvement ({epochs_no_improv}/{patience})")
 
         history_rows.append({
             "epoch":        epoch,
@@ -354,14 +433,22 @@ def main():
             "lr":           current_lr,
         })
 
+        # Early stopping
+        if epochs_no_improv >= patience:
+            print(f"\nEarly stopping — no improvement for {patience} epochs.")
+            break
+
     pl.DataFrame(history_rows).write_parquet(history_path)
-    print(f"Training history: {history_path}")
 
     total_mins = (time.time() - wall_start) / 60
     print(f"\nTotal training time: {total_mins:.1f} min")
-    print(f"\nTraining complete. Best val AUROC (5-label benchmark): {best_auroc:.4f}")
+    print(f"Training complete. Best val AUROC (5-label): {best_auroc:.4f}")
     print(f"Best checkpoint : {output_dir / 'best_model.pth'}")
     print(f"Training history: {history_path}")
+
+    if smoke_test:
+        print("\nSmoke test passed — pipeline is working correctly.")
+        return
 
     # ------------------------------------------------------------------
     # Final test-set evaluation using the best checkpoint
@@ -379,8 +466,8 @@ def main():
         )
         test_loader = DataLoader(
             test_dataset, batch_size=batch_size,
-            shuffle=False, num_workers=num_workers, pin_memory=True,
-            persistent_workers=(num_workers > 0),
+            shuffle=False, num_workers=t_cfg["num_workers"], pin_memory=True,
+            persistent_workers=(t_cfg["num_workers"] > 0),
         )
 
         _, test_mean_auroc, test_comp_auroc, test_aurocs = evaluate(
@@ -398,7 +485,6 @@ def main():
         print(f"  {'Mean (all 14 labels)':<35} {test_mean_auroc:.4f}")
         print("  * = CheXpert leaderboard labels")
 
-        # Save test results to JSON for notebooks / reporting
         import json
         test_results = {
             "auroc_5_competition": round(test_comp_auroc, 6),
@@ -409,8 +495,6 @@ def main():
         with open(results_path, "w") as f:
             json.dump(test_results, f, indent=2)
         print(f"\nTest results saved to: {results_path}")
-    else:
-        print("\nNo test_parquet found in config — skipping final test evaluation.")
 
 
 if __name__ == "__main__":
