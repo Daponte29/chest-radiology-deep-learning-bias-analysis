@@ -261,7 +261,7 @@ def main():
     batch_size  = t_cfg["batch_size"]
     image_root  = cfg["paths"]["image_root"]
 
-    target_cols = cfg.get("labels", None)   # None → dataset uses all 14 defaults
+    target_cols = cfg.get("labels", None) 
 
     train_dataset = CheXpertDataset(
         manifest_path  = cfg["paths"]["train_parquet"],
@@ -478,6 +478,7 @@ def main():
             manifest_path  = test_parquet,
             image_root_dir = image_root,
             transform      = build_transforms(img_size, is_train=False),
+            target_cols    = label_names,
         )
         test_loader = DataLoader(
             test_dataset, batch_size=batch_size,
@@ -485,25 +486,20 @@ def main():
             persistent_workers=(t_cfg["num_workers"] > 0),
         )
 
-        _, test_mean_auroc, test_comp_auroc, test_aurocs = evaluate(
+        _, test_mean_auroc, _, test_aurocs = evaluate(
             model, test_loader, criterion, device, label_names,
         )
 
-        competition_labels = {"Atelectasis", "Cardiomegaly", "Consolidation", "Edema", "Pleural Effusion"}
         print(f"\n{'Label':<35} {'Test AUROC':>10}")
         print("-" * 47)
         for name, score in test_aurocs:
-            tag = " *" if name in competition_labels else ""
-            print(f"  {name:<35} {score:.4f}{tag}")
+            print(f"  {name:<35} {score:.4f}")
         print("-" * 47)
-        print(f"  {'Mean (5 competition labels)*':<35} {test_comp_auroc:.4f}")
-        print(f"  {'Mean (all 14 labels)':<35} {test_mean_auroc:.4f}")
-        print("  * = CheXpert leaderboard labels")
+        print(f"  {'Mean (all selected labels)':<35} {test_mean_auroc:.4f}")
 
         import json
         test_results = {
-            "auroc_5_competition": round(test_comp_auroc, 6),
-            "auroc_14_mean":       round(test_mean_auroc, 6),
+            "auroc_mean": round(test_mean_auroc, 6),
             "per_label": {name: round(score, 6) for name, score in test_aurocs},
         }
         results_path = output_dir / "test_results.json"

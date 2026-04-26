@@ -1,0 +1,14 @@
+{
+  "checkpoint": "results\\gb\\best_model.pth",
+  "epoch": 2,
+  "split": "test",
+  "auroc_mean": 0.687786,
+  "per_label": {
+    "Enlarged Cardiomediastinum": 0.395484,
+    "Cardiomegaly": 0.75,
+    "Lung Opacity": 0.809754,
+    "Edema": 0.883631,
+    "Pneumonia": 0.501933,
+    "Support Devices": 0.785917
+  }
+}

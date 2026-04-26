@@ -3,8 +3,8 @@
 Design notes
 ------------
 - The classifier head outputs raw logits (no Sigmoid).
-- Use nn.BCEWithLogitsLoss() as your loss function during training.
-  It fuses sigmoid + BCE in one numerically stable operation.
+- Use FocalLoss(gamma=2.0) as your loss function during training (see train.py).
+  FocalLoss applies sigmoid internally and down-weights easy negatives.
 - At inference, wrap logits with torch.sigmoid() to get probabilities,
   then threshold (e.g. >= 0.5) to get binary predictions per label.
 
@@ -39,7 +39,7 @@ class DenseNetClassifier(nn.Module):
     """DenseNet backbone with a linear classifier head for multi-label classification.
 
     Outputs **raw logits** — no sigmoid applied.  Pair with
-    ``nn.BCEWithLogitsLoss`` during training and apply ``torch.sigmoid``
+    ``FocalLoss(gamma=2.0)`` during training and apply ``torch.sigmoid``
     at inference time.
 
     Args:
@@ -68,7 +68,7 @@ class DenseNetClassifier(nn.Module):
 
         in_features = backbone.classifier.in_features
 
-        # Raw logits — BCEWithLogitsLoss handles the sigmoid internally.
+        # Raw logits — FocalLoss applies sigmoid internally during training.
         head_layers: list[nn.Module] = []
         if dropout_p > 0.0:
             head_layers.append(nn.Dropout(p=dropout_p))
