@@ -27,7 +27,10 @@ from src.models.densenet import DenseNetClassifier
 IMAGENET_MEAN = [0.485, 0.456, 0.406]
 IMAGENET_STD  = [0.229, 0.224, 0.225]
 
-COMPETITION_LABELS = {"Atelectasis", "Cardiomegaly", "Consolidation", "Edema", "Pleural Effusion"}
+TARGET_LABELS = [
+    "Enlarged Cardiomediastinum", "Cardiomegaly", "Lung Opacity",
+    "Edema", "Pneumonia", "Support Devices",
+]
 
 
 def load_config(path: str) -> dict:
@@ -95,9 +98,10 @@ def main():
 
     # Dataset & loader
     dataset = CheXpertDataset(
-        manifest_path  = parquet_path, # The path to the test data needed for object initialization.
+        manifest_path  = parquet_path,
         image_root_dir = cfg["paths"]["image_root"],
         transform      = build_transform(t_cfg["img_size"]),
+        target_cols    = cfg.get("labels", None),
     )
     loader = DataLoader(
         dataset, batch_size=t_cfg["batch_size"],
@@ -124,32 +128,25 @@ def main():
     aurocs = run_evaluation(model, loader, device, label_names)
 
     # Print results
-    comp_scores = [s for n, s in aurocs if n in COMPETITION_LABELS and not np.isnan(s)]
-    all_scores  = [s for _, s in aurocs if not np.isnan(s)]
-    comp_mean   = float(np.mean(comp_scores)) if comp_scores else float("nan")
-    all_mean    = float(np.mean(all_scores))  if all_scores  else float("nan")
+    all_scores = [s for _, s in aurocs if not np.isnan(s)]
+    all_mean   = float(np.mean(all_scores)) if all_scores else float("nan")
 
     print(f"\n{'Label':<35} {'AUROC':>8}")
     print("-" * 45)
     for name, score in aurocs:
-        tag = "  *" if name in COMPETITION_LABELS else ""
-        print(f"  {name:<35} {score:.4f}{tag}")
+        print(f"  {name:<35} {score:.4f}")
     print("-" * 45)
-    print(f"  {'Mean — 5 competition labels *':<35} {comp_mean:.4f}")
-    print(f"  {'Mean — all 14 labels':<35} {all_mean:.4f}")
-    print("\n  * = CheXpert leaderboard labels (Atelectasis, Cardiomegaly,")
-    print("      Consolidation, Edema, Pleural Effusion)")
+    print(f"  {'Mean — all selected labels':<35} {all_mean:.4f}")
 
     # Save JSON
     output_dir   = Path(cfg["paths"]["output_dir"])
     results_path = output_dir / f"{args.split}_results.json"
     results = {
-        "checkpoint":           ckpt_path,
-        "epoch":                saved_epoch,
-        "split":                args.split,
-        "auroc_5_competition":  round(comp_mean, 6),
-        "auroc_14_mean":        round(all_mean,  6),
-        "per_label":            {name: round(score, 6) for name, score in aurocs},
+        "checkpoint":  ckpt_path,
+        "epoch":       saved_epoch,
+        "split":       args.split,
+        "auroc_mean":  round(all_mean, 6),
+        "per_label":   {name: round(score, 6) for name, score in aurocs},
     }
     with open(results_path, "w") as f:
         json.dump(results, f, indent=2)

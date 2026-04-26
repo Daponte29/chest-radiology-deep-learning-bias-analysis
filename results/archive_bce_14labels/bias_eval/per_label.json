@@ -1,20 +1,20 @@
 {
   "gb": {
     "original": {
-      "Enlarged Cardiomediastinum": 0.638881,
-      "Cardiomegaly": 0.808489,
-      "Lung Opacity": 0.891704,
+      "Enlarged Cardiomediastinum": 0.638881, 
+      "Cardiomegaly": 0.808489, 
+      "Lung Opacity": 0.891704, 
       "Lung Lesion": 0.099502,
-      "Edema": 0.874702,
+      "Edema": 0.874702, 
       "Consolidation": 0.910662,
-      "Pneumonia": 0.63982,
+      "Pneumonia": 0.63982, 
       "Atelectasis": 0.802205,
       "Pneumothorax": 0.650549,
       "Pleural Effusion": 0.878397,
       "Pleural Other": 0.940299,
       "Fracture": NaN,
       "No Finding": 0.888112,
-      "Support Devices": 0.656271
+      "Support Devices": 0.656271 
     },
     "gb": {
       "Enlarged Cardiomediastinum": 0.663623,

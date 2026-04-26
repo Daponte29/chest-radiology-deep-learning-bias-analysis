@@ -100,17 +100,25 @@ class FocalLoss(nn.Module):
 
     Down-weights easy (confident) predictions so the model focuses on hard,
     rare-label examples.  gamma=0 reduces to standard BCE.
+
+    Args:
+        gamma:      Focusing parameter (default 2.0).
+        pos_weight: Per-label positive class weights (tensor of shape [num_classes]).
+                    Compensates for class imbalance on top of focal weighting.
     """
 
-    def __init__(self, gamma: float = 2.0):
+    def __init__(self, gamma: float = 2.0, pos_weight: torch.Tensor | None = None):
         super().__init__()
-        self.gamma = gamma
+        self.gamma      = gamma
+        self.pos_weight = pos_weight
 
     def forward(self, logits: torch.Tensor, targets: torch.Tensor) -> torch.Tensor:
-        bce     = nn.functional.binary_cross_entropy_with_logits(
-            logits, targets, reduction="none"
+        # Standard BCE per element (no reduction)
+        bce = nn.functional.binary_cross_entropy_with_logits(
+            logits, targets, pos_weight=self.pos_weight, reduction="none"
         )
         probs   = torch.sigmoid(logits)
+        # p_t = probability of the true class
         p_t     = targets * probs + (1 - targets) * (1 - probs)
         focal_w = (1 - p_t) ** self.gamma
         return (focal_w * bce).mean()
@@ -216,9 +224,8 @@ def evaluate(model, loader, criterion, device, label_names):
     mean_auroc   = float(np.mean(valid_scores)) if valid_scores else float("nan")
     val_loss     = total_loss / len(loader.dataset)
 
-    competition_labels = {"Atelectasis", "Cardiomegaly", "Consolidation", "Edema", "Pleural Effusion"}
-    comp_scores = [s for n, s in aurocs if n in competition_labels and not np.isnan(s)]
-    comp_auroc  = float(np.mean(comp_scores)) if comp_scores else float("nan")
+    # comp_auroc = mean over all selected labels (used for checkpoint tracking)
+    comp_auroc = mean_auroc
 
     return val_loss, mean_auroc, comp_auroc, aurocs
 
@@ -254,15 +261,19 @@ def main():
     batch_size  = t_cfg["batch_size"]
     image_root  = cfg["paths"]["image_root"]
 
+    target_cols = cfg.get("labels", None)   # None → dataset uses all 14 defaults
+
     train_dataset = CheXpertDataset(
         manifest_path  = cfg["paths"]["train_parquet"],
         image_root_dir = image_root,
         transform      = build_transforms(img_size, is_train=True),
+        target_cols    = target_cols,
     )
     valid_dataset = CheXpertDataset(
         manifest_path  = cfg["paths"]["valid_parquet"],
         image_root_dir = image_root,
         transform      = build_transforms(img_size, is_train=False),
+        target_cols    = target_cols,
     )
 
     # Smoke test: subset to N images, no sampler
@@ -307,18 +318,22 @@ def main():
     # Model
     # ------------------------------------------------------------------
     model = DenseNetClassifier(
-        num_classes = num_classes,
+        num_classes = num_classes,           # derived from dataset, not hardcoded
         pretrained  = cfg["model"]["pretrained"],
         variant     = cfg["model"]["name"],
     ).to(device)
     print(f"Parameters  : {sum(p.numel() for p in model.parameters()):,}")
 
     # ------------------------------------------------------------------
-    # Focal loss
+    # Focal loss with per-label pos_weight
     # ------------------------------------------------------------------
-    gamma     = t_cfg.get("focal_gamma", 2.0)
-    criterion = FocalLoss(gamma=gamma)
-    print(f"Loss        : FocalLoss (gamma={gamma})")
+    targets  = base_ds.targets                          # (N, C)
+    n_pos    = targets.sum(axis=0).clip(min=1)
+    n_neg    = len(targets) - n_pos
+    pw       = torch.tensor(n_neg / n_pos, dtype=torch.float32).to(device)
+    gamma    = t_cfg.get("focal_gamma", 2.0)
+    criterion = FocalLoss(gamma=gamma, pos_weight=pw)
+    print(f"Loss        : FocalLoss (gamma={gamma}, pos_weight computed from training set)")
 
     # ------------------------------------------------------------------
     # Optimizer + cosine LR scheduler

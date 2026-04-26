@@ -49,9 +49,8 @@ TEST_SETS = {
 }
 
 LABEL_NAMES = [
-    "Enlarged Cardiomediastinum", "Cardiomegaly", "Lung Opacity", "Lung Lesion",
-    "Edema", "Consolidation", "Pneumonia", "Atelectasis", "Pneumothorax",
-    "Pleural Effusion", "Pleural Other", "Fracture", "No Finding", "Support Devices",
+    "Enlarged Cardiomediastinum", "Cardiomegaly", "Lung Opacity",
+    "Edema", "Pneumonia", "Support Devices",
 ]
 
 OUTPUT_DIR = Path("results/bias_eval")
