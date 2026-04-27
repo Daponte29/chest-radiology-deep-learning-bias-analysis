@@ -20,18 +20,23 @@ import torch
 from torch.utils.data import DataLoader
 
 from src.data.chexpert_dataset import CheXpertDataset
-from src.evaluate import build_transform, run_evaluation, COMPETITION_LABELS
+from src.evaluate import build_transform, run_evaluation
 from src.models.densenet import DenseNetClassifier
 from src.utils.reliance import compute_reliance
 
 # ---------------------------------------------------------------------------
-# Experiment registry
+# Config
 # ---------------------------------------------------------------------------
 
-IMAGE_ROOT = "src/data/1"
-IMG_SIZE   = 224
-BATCH_SIZE = 16
+IMAGE_ROOT  = "src/data/1"
+IMG_SIZE    = 224
+BATCH_SIZE  = 16
 NUM_WORKERS = 4
+
+LABEL_NAMES = [
+    "Enlarged Cardiomediastinum", "Cardiomegaly", "Lung Opacity",
+    "Edema", "Pneumonia", "Support Devices",
+]
 
 BIASED_MODELS = {
     "gb": "results/gb/best_model.pth",
@@ -48,20 +53,15 @@ TEST_SETS = {
     "pr":       "src/data/test_manifest_pr.parquet",
 }
 
-LABEL_NAMES = [
-    "Enlarged Cardiomediastinum", "Cardiomegaly", "Lung Opacity",
-    "Edema", "Pneumonia", "Support Devices",
-]
-
-OUTPUT_DIR = Path("results/bias_eval")
+DEFAULT_RESULTS_DIR = Path("results")
 
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 
-def auroc5(aurocs: list[tuple[str, float]]) -> float:
-    scores = [s for n, s in aurocs if n in COMPETITION_LABELS and not np.isnan(s)]
+def mean_auroc(aurocs: list[tuple[str, float]]) -> float:
+    scores = [s for _, s in aurocs if not np.isnan(s)]
     return float(np.mean(scores)) if scores else float("nan")
 
 
@@ -70,6 +70,7 @@ def build_loader(parquet: str) -> DataLoader:
         manifest_path  = parquet,
         image_root_dir = IMAGE_ROOT,
         transform      = build_transform(IMG_SIZE),
+        target_cols    = LABEL_NAMES,
     )
     return DataLoader(
         dataset, batch_size=BATCH_SIZE, shuffle=False,
@@ -95,40 +96,55 @@ def load_model(ckpt_path: str, device: torch.device) -> DenseNetClassifier:
 # ---------------------------------------------------------------------------
 
 def main():
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    print(f"Device: {device}\n")
-    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--results-dir", default=None,
+                        help="Root results folder, e.g. results/nick. "
+                             "Looks for checkpoints at <results-dir>/{gb,ps,ce,pr}/best_model.pth "
+                             "and saves bias_eval output to <results-dir>/bias_eval/. "
+                             "Defaults to results/")
+    args = parser.parse_args()
 
-    # Pre-build all test loaders once (no need to reload per model)
+    results_dir = Path(args.results_dir) if args.results_dir else DEFAULT_RESULTS_DIR
+    output_dir  = results_dir / "bias_eval"
+
+    biased_models = {
+        name: str(results_dir / name / "best_model.pth")
+        for name in ["gb", "ps", "ce", "pr"]
+    }
+
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    print(f"Device      : {device}")
+    print(f"Results dir : {results_dir}")
+    print(f"Output dir  : {output_dir}\n")
+    output_dir.mkdir(parents=True, exist_ok=True)
+
     print("Building test loaders...")
     loaders = {name: build_loader(parquet) for name, parquet in TEST_SETS.items()}
 
-    # AUC matrix: model -> {test_set -> auroc_5}
-    auc_matrix: dict[str, dict[str, float]] = {}
+    auc_matrix:       dict[str, dict[str, float]] = {}
     per_label_results: dict[str, dict[str, dict]] = {}
 
-    for model_name, ckpt_path in BIASED_MODELS.items():
+    for model_name, ckpt_path in biased_models.items():
         print(f"\n{'='*55}")
         print(f"Model: {model_name}  |  {ckpt_path}")
         print(f"{'='*55}")
 
         if not Path(ckpt_path).exists():
-            print(f"  SKIPPING — checkpoint not found")
+            print("  SKIPPING — checkpoint not found")
             continue
 
         model = load_model(ckpt_path, device)
-        auc_matrix[model_name] = {}
+        auc_matrix[model_name]        = {}
         per_label_results[model_name] = {}
 
         for test_name, loader in loaders.items():
             print(f"  Running test set: {test_name}")
             aurocs = run_evaluation(model, loader, device, LABEL_NAMES)
-            score  = auroc5(aurocs)
-            auc_matrix[model_name][test_name] = round(score, 6)
-            per_label_results[model_name][test_name] = {
-                n: round(s, 6) for n, s in aurocs
-            }
-            print(f"    auroc_5 = {score:.4f}")
+            score  = mean_auroc(aurocs)
+            auc_matrix[model_name][test_name]        = round(score, 6)
+            per_label_results[model_name][test_name] = {n: round(s, 6) for n, s in aurocs}
+            print(f"    mean_auroc = {score:.4f}")
 
         del model
         if device.type == "cuda":
@@ -150,21 +166,21 @@ def main():
         print(f"    Mean matching : {r['mean_matching_reliance']:.4f}")
         print(f"    Mean opposing : {r['mean_opposing_reliance']:.4f}")
 
-    # Save outputs
+    # Save
     auc_rows = [
-        {"model": m, "test_set": t, "auroc_5": s}
+        {"model": m, "test_set": t, "auroc": s}
         for m, tests in auc_matrix.items()
         for t, s in tests.items()
     ]
-    pl.DataFrame(auc_rows).write_parquet(OUTPUT_DIR / "auc_matrix.parquet")
+    pl.DataFrame(auc_rows).write_parquet(output_dir / "auc_matrix.parquet")
 
-    with open(OUTPUT_DIR / "reliance.json", "w") as f:
+    with open(output_dir / "reliance.json", "w") as f:
         json.dump(reliance_results, f, indent=2)
 
-    with open(OUTPUT_DIR / "per_label.json", "w") as f:
+    with open(output_dir / "per_label.json", "w") as f:
         json.dump(per_label_results, f, indent=2)
 
-    print(f"\nSaved to {OUTPUT_DIR}/")
+    print(f"\nSaved to {output_dir}/")
     print("  auc_matrix.parquet  — raw 4x5 AUC scores")
     print("  reliance.json       — matching/opposing ratios per model")
     print("  per_label.json      — full per-label breakdown")

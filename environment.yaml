@@ -1,0 +1,31 @@
+name: DL_PROJECT
+channels:
+  - pytorch
+  - nvidia
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.12
+  - pip
+  # PyTorch with CUDA — installed via conda for proper GPU driver linking
+  - pytorch>=2.0.0
+  - torchvision>=0.15.0
+  - pytorch-cuda=11.8       # change to 12.1 if your drivers support it
+  - pip:
+      - polars
+      - pyarrow
+      - pandas
+      - numpy
+      - scikit-learn
+      - scipy
+      - Pillow
+      - opencv-python
+      - matplotlib
+      - seaborn
+      - tqdm
+      - PyYAML
+      - python-dotenv
+      - kagglehub
+      - pytest
+      - black
+      - flake8

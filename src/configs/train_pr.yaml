@@ -1,14 +1,15 @@
-# Experiment 5 — Patch Rotation (shape bias): rotated-patch train images, original validation.
+# Experiment 5 — Patch Rotation (texture bias): rotated-patch train images, original validation.
 # Stylized images already generated in src/data/1 with _pr suffix.
 
 seed: 42
 
 paths:
-  image_root:    src/data/1
-  train_parquet: src/data/train_manifest_pr.parquet
-  valid_parquet: src/data/valid_manifest.parquet
-  test_parquet:  src/data/test_manifest_pr.parquet
-  output_dir:    results/pr/
+  image_root:          src/data/1
+  train_parquet:       src/data/train_manifest_pr.parquet
+  train_parquet_blend: src/data/train_manifest.parquet   # original images for blending
+  valid_parquet:       src/data/valid_manifest.parquet
+  test_parquet:        src/data/test_manifest_pr.parquet
+  output_dir:          results/pr/
 
 labels:
   - Enlarged Cardiomediastinum
@@ -23,15 +24,37 @@ model:
   pretrained:  true
 
 training:
-  batch_size:               16
-  num_epochs:               10
+  # --- Loss ---
+  loss:                     focal
+  focal_gamma:              2.0
+
+  # --- Sampler & blending ---
+  weighted_sampler:         true
+  blend_ratio:              0.3     # 30% patch-rotation + 70% original
+
+  # --- Optimizer ---
+  optimizer:                adam
   learning_rate:            0.0001
   betas:                    [0.9, 0.999]
   eps:                      1.0e-8
+  momentum:                 0.9
   weight_decay:             1.0e-5
+
+  # --- Scheduler ---
+  scheduler:                cosine
+  eta_min:                  1.0e-6
+  step_size:                3
+  step_gamma:               0.1
+
+  # --- Augmentation ---
+  augmentation:
+    horizontal_flip:        true
+    color_jitter:           0.15
+
+  # --- General ---
+  batch_size:               16
+  num_epochs:               10
   img_size:                 224
   num_workers:              4
   amp:                      true
-  focal_gamma:              2.0
-  weighted_sampler:         true
   early_stopping_patience:  3

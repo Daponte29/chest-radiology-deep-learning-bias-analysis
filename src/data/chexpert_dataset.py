@@ -6,54 +6,39 @@ import polars as pl
 
 
 class CheXpertDataset(Dataset):
-    """
-    Custom Dataset for CheXpert that loads from a processed Parquet manifest.
-    Supports standard images as well as stylized variants for shape/texture bias analysis.
-    """
+    """Loads CheXpert images and labels from a Parquet manifest."""
 
     DEFAULT_LABELS = [
-        'Enlarged Cardiomediastinum', # 1
-        'Cardiomegaly', # 2
-        'Lung Opacity', # 3
-        'Lung Lesion',  # 4
-        'Edema',         # 5
-        'Consolidation', # 6
-        'Pneumonia',     # 7
-        'Atelectasis',   # 8
-        'Pneumothorax',  # 9
-        'Pleural Effusion', # 10
-        'Pleural Other', # 11
-        'Fracture',      # 12
-        'No Finding',    # 13
-        'Support Devices', # 14
+        "Enlarged Cardiomediastinum",
+        "Cardiomegaly",
+        "Lung Opacity",
+        "Lung Lesion",
+        "Edema",
+        "Consolidation",
+        "Pneumonia",
+        "Atelectasis",
+        "Pneumothorax",
+        "Pleural Effusion",
+        "Pleural Other",
+        "Fracture",
+        "No Finding",
+        "Support Devices",
     ]
 
-    def __init__(
-        self,
-        manifest_path, # Path to the parquet manifest file.
-        image_root_dir, # Root directory where images are stored.
-        transform=None, # Transform pipeline (e.g., data augmentation) to apply to images.
-        target_cols=None, # Label columns to use as targets. Defaults to all 14 CheXpert pathology columns.
-    ):
-        """
-        Args:
-            manifest_path (str): Path to the parquet manifest file.
-            image_root_dir (str): Root directory where images are stored.
-            transform (callable, optional): PyTorch transform pipeline.
-            target_cols (list, optional): Label columns to use as targets.
-                Defaults to all 14 CheXpert pathology columns.
-        """
+    def __init__(self, manifest_path, image_root_dir, transform=None, target_cols=None):
         self.image_root_dir = Path(image_root_dir)
-        self.transform = transform
-        self.target_cols = target_cols or self.DEFAULT_LABELS # Label attribute for dataset initialization.
+        self.transform      = transform
+        self.target_cols    = target_cols or self.DEFAULT_LABELS
 
         print(f"Loading manifest from {manifest_path}...")
-        self.df = pl.read_parquet(manifest_path)
-        # Manifest paths are stored as 'CheXpert-v1.0-small/train/...' but images
-        # are rooted directly at image_root_dir, so drop the first path component.
-        self.paths = [str(Path(*Path(p).parts[1:])) for p in self.df["Path"].to_list()] 
-        self.targets = self.df.select(self.target_cols).to_numpy().astype("float32")
-        print(f"Dataset loaded. Size: {len(self.paths)} images. Targets: {self.target_cols}")
+        df = pl.read_parquet(manifest_path)
+
+        # Manifest paths start with "CheXpert-v1.0-small/..." — strip that prefix
+        # so paths resolve correctly under image_root_dir
+        self.paths   = [str(Path(*Path(p).parts[1:])) for p in df["Path"].to_list()]
+        self.targets = df.select(self.target_cols).to_numpy().astype("float32")
+
+        print(f"Dataset loaded. Size: {len(self.paths)} images. Labels: {self.target_cols}")
 
     def __len__(self):
         return len(self.paths)
@@ -61,7 +46,7 @@ class CheXpertDataset(Dataset):
     def __getitem__(self, idx):
         img_path = self.image_root_dir / self.paths[idx]
         try:
-            image = Image.open(img_path).convert("RGB") # converts to pixel matrix values in [0, 255]
+            image = Image.open(img_path).convert("RGB")
         except FileNotFoundError:
             print(f"Warning: Image not found at {img_path}")
             return torch.zeros((3, 224, 224)), torch.zeros(len(self.target_cols))

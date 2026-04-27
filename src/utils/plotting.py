@@ -2,22 +2,15 @@ import matplotlib.pyplot as plt
 import polars as pl
 from pathlib import Path
 
-RESULTS_DIR = Path("results")
-
-EXPERIMENTS = {
-    "original": RESULTS_DIR / "original",
-    "gb":       RESULTS_DIR / "gb",
-    "ps":       RESULTS_DIR / "ps",
-    "ce":       RESULTS_DIR / "ce",
-    "pr":       RESULTS_DIR / "pr",
-}
+DEFAULT_RESULTS_DIR = Path("results")
+EXPERIMENT_NAMES    = ["original", "gb", "ps", "ce", "pr"]
 
 LABELS = {
     "original": "Baseline (original)",
-    "gb":       "Gaussian Blur (texture)",
+    "gb":       "Gaussian Blur (shape)",
     "ps":       "Patch Shuffle (texture)",
     "ce":       "Canny Edge (shape)",
-    "pr":       "Patch Rotation (shape)",
+    "pr":       "Patch Rotation (texture)",
 }
 
 COLORS = {
@@ -46,21 +39,24 @@ def _load_history(folder: Path) -> pl.DataFrame | None:
 
 
 def plot_training_curves(
-    metric: str = "val_auroc_5",
+    metric: str = "val_auroc",
     out: str | None = None,
     show: bool = True,
+    results_dir: str | Path | None = None,
 ) -> None:
-    """All 5 models on one chart for a single metric.
+    """Plot one metric across all 5 models on a single chart.
 
-    Args:
-        metric: Column to plot — val_auroc_5, val_auroc_14, train_loss, val_loss.
-        out:    File path to save. Defaults to results/training_curves.png.
-        show:   Whether to call plt.show().
+    metric:      column to plot — val_auroc, train_loss, val_loss
+    out:         save path (default: <results_dir>/training_curves.png)
+    results_dir: root results folder, e.g. results/nick (default: results/)
     """
-    out = out or str(RESULTS_DIR / "training_curves.png")
+    rdir = Path(results_dir) if results_dir else DEFAULT_RESULTS_DIR
+    out  = out or str(rdir / "training_curves.png")
+    experiments = {name: rdir / name for name in EXPERIMENT_NAMES}
+
     fig, ax = plt.subplots(figsize=(9, 5))
 
-    for name, folder in EXPERIMENTS.items():
+    for name, folder in experiments.items():
         df = _load_history(folder)
         if df is None:
             print(f"Skipping {name} — no training history found in {folder}")
@@ -93,16 +89,20 @@ def plot_training_curves(
 def plot_loss_curves(
     out: str | None = None,
     show: bool = True,
+    results_dir: str | Path | None = None,
 ) -> None:
-    """5 subplots — one per model — each showing train loss vs val loss.
+    """Train vs val loss — one subplot per model.
 
-    Saves to results/loss_curves.png by default.
+    results_dir: root results folder, e.g. results/nick (default: results/)
+    out:         save path (default: <results_dir>/loss_curves.png)
     """
-    out = out or str(RESULTS_DIR / "loss_curves.png")
+    rdir = Path(results_dir) if results_dir else DEFAULT_RESULTS_DIR
+    out  = out or str(rdir / "loss_curves.png")
+    experiments = {name: rdir / name for name in EXPERIMENT_NAMES}
 
     histories = {
         name: _load_history(folder)
-        for name, folder in EXPERIMENTS.items()
+        for name, folder in experiments.items()
     }
     available = {k: v for k, v in histories.items() if v is not None}
 

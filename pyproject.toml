@@ -17,19 +17,25 @@ dependencies = [
     "torchvision>=0.15.0",
     "pandas",
     "numpy",
-    "scikit-learn",
-    "tqdm",
-    "Pillow",
-    "matplotlib",
     "polars",
-    "pyarrow"
+    "pyarrow",
+    "scikit-learn",
+    "scipy",
+    "Pillow",
+    "opencv-python",
+    "matplotlib",
+    "seaborn",
+    "tqdm",
+    "PyYAML",
+    "python-dotenv",
+    "kagglehub",
 ]
 
 [project.optional-dependencies]
 dev = [
     "pytest",
     "black",
-    "flake8"
+    "flake8",
 ]
 
 [tool.setuptools.packages.find]

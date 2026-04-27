@@ -36,7 +36,7 @@ import torch
 import torch.nn as nn
 import yaml
 from sklearn.metrics import roc_auc_score
-from torch.utils.data import DataLoader, WeightedRandomSampler, Subset
+from torch.utils.data import ConcatDataset, DataLoader, Subset, WeightedRandomSampler
 from torchvision import transforms
 from tqdm import tqdm
 
@@ -75,20 +75,16 @@ IMAGENET_MEAN = [0.485, 0.456, 0.406]
 IMAGENET_STD  = [0.229, 0.224, 0.225]
 
 
-def build_transforms(img_size: int, is_train: bool) -> transforms.Compose:
-    if is_train:
-        return transforms.Compose([
-            transforms.Resize((img_size, img_size)),
-            transforms.RandomHorizontalFlip(),
-            transforms.ColorJitter(brightness=0.15, contrast=0.15),
-            transforms.ToTensor(),
-            transforms.Normalize(IMAGENET_MEAN, IMAGENET_STD),
-        ])
-    return transforms.Compose([
-        transforms.Resize((img_size, img_size)),
-        transforms.ToTensor(),
-        transforms.Normalize(IMAGENET_MEAN, IMAGENET_STD),
-    ])
+def build_transforms(img_size: int, is_train: bool, aug_cfg: dict | None = None) -> transforms.Compose:
+    steps = [transforms.Resize((img_size, img_size))]
+    if is_train and aug_cfg:
+        if aug_cfg.get("horizontal_flip", True):
+            steps.append(transforms.RandomHorizontalFlip())
+        jitter = aug_cfg.get("color_jitter", 0.15)
+        if jitter > 0:
+            steps.append(transforms.ColorJitter(brightness=jitter, contrast=jitter))
+    steps += [transforms.ToTensor(), transforms.Normalize(IMAGENET_MEAN, IMAGENET_STD)]
+    return transforms.Compose(steps)
 
 
 # ---------------------------------------------------------------------------
@@ -96,60 +92,85 @@ def build_transforms(img_size: int, is_train: bool) -> transforms.Compose:
 # ---------------------------------------------------------------------------
 
 class FocalLoss(nn.Module):
-    """Multi-label focal loss.
+    """Multi-label focal loss. gamma=0 reduces to standard BCE."""
 
-    Down-weights easy (confident) predictions so the model focuses on hard,
-    rare-label examples.  gamma=0 reduces to standard BCE.
-
-    Args:
-        gamma:      Focusing parameter (default 2.0).
-        pos_weight: Per-label positive class weights (tensor of shape [num_classes]).
-                    Compensates for class imbalance on top of focal weighting.
-    """
-
-    def __init__(self, gamma: float = 2.0, pos_weight: torch.Tensor | None = None):
+    def __init__(self, gamma: float = 2.0):
         super().__init__()
-        self.gamma      = gamma
-        self.pos_weight = pos_weight
+        self.gamma = gamma
 
     def forward(self, logits: torch.Tensor, targets: torch.Tensor) -> torch.Tensor:
-        # Standard BCE per element (no reduction)
-        bce = nn.functional.binary_cross_entropy_with_logits(
-            logits, targets, pos_weight=self.pos_weight, reduction="none"
-        )
-        probs   = torch.sigmoid(logits)
-        # p_t = probability of the true class
-        p_t     = targets * probs + (1 - targets) * (1 - probs)
-        focal_w = (1 - p_t) ** self.gamma
-        return (focal_w * bce).mean()
+        bce    = nn.functional.binary_cross_entropy_with_logits(logits, targets, reduction="none")
+        p_t    = targets * torch.sigmoid(logits) + (1 - targets) * (1 - torch.sigmoid(logits))
+        return ((1 - p_t) ** self.gamma * bce).mean()
 
 
 # ---------------------------------------------------------------------------
 # WeightedRandomSampler
 # ---------------------------------------------------------------------------
 
-def build_sampler(dataset: CheXpertDataset) -> WeightedRandomSampler:
+def get_targets(dataset) -> np.ndarray:
+    """Extract (N, C) targets array from any dataset type."""
+    if isinstance(dataset, CheXpertDataset):
+        return dataset.targets
+    if isinstance(dataset, Subset):
+        return dataset.dataset.targets[np.array(dataset.indices)]
+    if isinstance(dataset, ConcatDataset):
+        return np.vstack([get_targets(d) for d in dataset.datasets])
+    raise TypeError(f"Cannot extract targets from {type(dataset)}")
+
+
+def get_label_names(dataset) -> list:
+    """Extract label names from any dataset type."""
+    if isinstance(dataset, CheXpertDataset):
+        return dataset.target_cols
+    if isinstance(dataset, Subset):
+        return dataset.dataset.target_cols
+    if isinstance(dataset, ConcatDataset):
+        return get_label_names(dataset.datasets[0])
+    raise TypeError(f"Cannot get label names from {type(dataset)}")
+
+
+def build_sampler(targets: np.ndarray) -> WeightedRandomSampler:
     """Return a sampler that upsamples rare-pathology images.
 
-    For each sample, weight = sum of (N / n_pos_label) for every positive label,
-    where N = total samples and n_pos_label = number of positives for that label.
-    Samples with rare positive labels get higher weight and appear more often.
+    Weight per sample = sum of inverse-frequency weights for its positive labels.
     """
-    targets = dataset.targets          # (N, num_classes) float32
-    n       = len(targets)
-    n_pos   = targets.sum(axis=0)     # positives per label
-    n_pos   = np.where(n_pos == 0, 1, n_pos)   # avoid div-by-zero
-    label_weights = n / n_pos          # inverse frequency per label
+    n             = len(targets)
+    n_pos         = np.where(targets.sum(axis=0) == 0, 1, targets.sum(axis=0))
+    label_weights = n / n_pos
+    sample_weights = torch.from_numpy((targets * label_weights).sum(axis=1)).float()
+    return WeightedRandomSampler(weights=sample_weights, num_samples=n, replacement=True)
 
-    # Per-sample weight = sum of label_weights for positive labels
-    sample_weights = (targets * label_weights).sum(axis=1)
-    sample_weights = torch.from_numpy(sample_weights).float()
 
-    return WeightedRandomSampler(
-        weights     = sample_weights,
-        num_samples = n,
-        replacement = True,
-    )
+def build_train_dataset(cfg: dict, t_cfg: dict, image_root: str,
+                        target_cols, transform, seed: int):
+    """Build the training dataset, optionally blending stylized + original images.
+
+    blend_ratio controls the fraction of stylized images (default 1.0 = all stylized).
+    Requires paths.train_parquet_blend to point to the original manifest.
+    Total dataset size stays equal to len(stylized dataset) regardless of ratio.
+    """
+    train_parquet = cfg["paths"]["train_parquet"]
+    blend_parquet = cfg["paths"].get("train_parquet_blend")
+    blend_ratio   = float(t_cfg.get("blend_ratio", 1.0))
+
+    if blend_ratio < 1.0 and blend_parquet:
+        stylized_ds = CheXpertDataset(train_parquet, image_root, transform, target_cols)
+        original_ds = CheXpertDataset(blend_parquet,  image_root, transform, target_cols)
+
+        n_total    = len(stylized_ds)
+        n_stylized = int(n_total * blend_ratio)
+        n_original = n_total - n_stylized
+
+        rng     = np.random.default_rng(seed)
+        sty_idx = rng.choice(len(stylized_ds), size=n_stylized, replace=False).tolist()
+        ori_idx = rng.choice(len(original_ds), size=min(n_original, len(original_ds)), replace=False).tolist()
+
+        print(f"Blend       : {blend_ratio:.0%} stylized ({n_stylized:,}) + "
+              f"{1-blend_ratio:.0%} original ({len(ori_idx):,})")
+        return ConcatDataset([Subset(stylized_ds, sty_idx), Subset(original_ds, ori_idx)])
+
+    return CheXpertDataset(train_parquet, image_root, transform, target_cols)
 
 
 # ---------------------------------------------------------------------------
@@ -236,13 +257,25 @@ def evaluate(model, loader, criterion, device, label_names):
 
 def main():
     parser = argparse.ArgumentParser(description="Train DenseNet on CheXpert")
-    parser.add_argument("--config",     default="src/configs/train_original.yaml")
-    parser.add_argument("--resume",     default=None, metavar="CKPT")
-    parser.add_argument("--smoke-test", default=None, type=int, metavar="N",
-                        help="Overfit on N training images to verify the pipeline")
+    parser.add_argument("--config",      default="src/configs/train_original.yaml")
+    parser.add_argument("--resume",      default=None, metavar="CKPT")
+    parser.add_argument("--smoke-test",  default=None, type=int, metavar="N",
+                        help="Overfit on N images to verify the pipeline end-to-end")
+    # Quick overrides — these take precedence over whatever is in the YAML
+    parser.add_argument("--lr",          default=None, type=float, help="Override learning_rate")
+    parser.add_argument("--epochs",      default=None, type=int,   help="Override num_epochs")
+    parser.add_argument("--blend-ratio", default=None, type=float, help="Override blend_ratio (0.0-1.0)")
+    parser.add_argument("--loss",        default=None, choices=["focal", "bce"], help="Override loss")
     args = parser.parse_args()
 
     cfg = load_config(args.config)
+
+    # Apply CLI overrides on top of YAML
+    if args.lr          is not None: cfg["training"]["learning_rate"] = args.lr
+    if args.epochs      is not None: cfg["training"]["num_epochs"]    = args.epochs
+    if args.blend_ratio is not None: cfg["training"]["blend_ratio"]   = args.blend_ratio
+    if args.loss        is not None: cfg["training"]["loss"]          = args.loss
+
     set_seed(cfg["seed"])
 
     smoke_test = args.smoke_test is not None
@@ -261,13 +294,12 @@ def main():
     batch_size  = t_cfg["batch_size"]
     image_root  = cfg["paths"]["image_root"]
 
-    target_cols = cfg.get("labels", None) 
+    target_cols = cfg.get("labels", None)
+    aug_cfg     = t_cfg.get("augmentation", {})
 
-    train_dataset = CheXpertDataset(
-        manifest_path  = cfg["paths"]["train_parquet"],
-        image_root_dir = image_root,
-        transform      = build_transforms(img_size, is_train=True),
-        target_cols    = target_cols,
+    train_dataset = build_train_dataset(
+        cfg, t_cfg, image_root, target_cols,
+        build_transforms(img_size, is_train=True, aug_cfg=aug_cfg), cfg["seed"],
     )
     valid_dataset = CheXpertDataset(
         manifest_path  = cfg["paths"]["valid_parquet"],
@@ -287,8 +319,7 @@ def main():
     # ------------------------------------------------------------------
     use_sampler = t_cfg.get("weighted_sampler", True) and not smoke_test
     if use_sampler:
-        base_ds = train_dataset.dataset if isinstance(train_dataset, Subset) else train_dataset
-        sampler = build_sampler(base_ds)
+        sampler = build_sampler(get_targets(train_dataset))
         train_loader = DataLoader(
             train_dataset, batch_size=batch_size, sampler=sampler,
             num_workers=num_workers, pin_memory=True,
@@ -307,8 +338,7 @@ def main():
         persistent_workers=(num_workers > 0),
     )
 
-    base_ds      = train_dataset.dataset if isinstance(train_dataset, Subset) else train_dataset
-    label_names  = base_ds.target_cols
+    label_names  = get_label_names(train_dataset)
     num_classes  = len(label_names)
     print(f"Train samples: {len(train_dataset):,}")
     print(f"Valid samples: {len(valid_dataset):,}")
@@ -325,30 +355,63 @@ def main():
     print(f"Parameters  : {sum(p.numel() for p in model.parameters()):,}")
 
     # ------------------------------------------------------------------
-    # Focal loss with per-label pos_weight
+    # Loss — selected from config: focal | bce
     # ------------------------------------------------------------------
-    targets  = base_ds.targets                          # (N, C)
-    n_pos    = targets.sum(axis=0).clip(min=1)
-    n_neg    = len(targets) - n_pos
-    pw       = torch.tensor(n_neg / n_pos, dtype=torch.float32).to(device)
-    gamma    = t_cfg.get("focal_gamma", 2.0)
-    criterion = FocalLoss(gamma=gamma, pos_weight=pw)
-    print(f"Loss        : FocalLoss (gamma={gamma}, pos_weight computed from training set)")
+    loss_type = t_cfg.get("loss", "focal")
+    if loss_type == "focal":
+        gamma     = t_cfg.get("focal_gamma", 2.0)
+        criterion = FocalLoss(gamma=gamma)
+        print(f"Loss        : FocalLoss (gamma={gamma})")
+    elif loss_type == "bce":
+        criterion = nn.BCEWithLogitsLoss()
+        print(f"Loss        : BCEWithLogitsLoss")
+    else:
+        raise ValueError(f"Unknown loss '{loss_type}' — choose 'focal' or 'bce'")
 
     # ------------------------------------------------------------------
-    # Optimizer + cosine LR scheduler
+    # Optimizer — selected from config: adam | sgd
     # ------------------------------------------------------------------
-    optimizer = torch.optim.Adam(
-        model.parameters(),
-        lr           = t_cfg["learning_rate"],
-        betas        = tuple(t_cfg.get("betas", [0.9, 0.999])),
-        eps          = t_cfg.get("eps", 1e-8),
-        weight_decay = t_cfg["weight_decay"],
-    )
-    num_epochs = t_cfg["num_epochs"]
-    scheduler  = torch.optim.lr_scheduler.CosineAnnealingLR(
-        optimizer, T_max=num_epochs, eta_min=1e-6,
-    )
+    num_epochs   = t_cfg["num_epochs"]
+    opt_type     = t_cfg.get("optimizer", "adam")
+    lr           = t_cfg["learning_rate"]
+    weight_decay = t_cfg["weight_decay"]
+
+    if opt_type == "adam":
+        optimizer = torch.optim.Adam(
+            model.parameters(),
+            lr           = lr,
+            betas        = tuple(t_cfg.get("betas", [0.9, 0.999])),
+            eps          = t_cfg.get("eps", 1e-8),
+            weight_decay = weight_decay,
+        )
+    elif opt_type == "sgd":
+        optimizer = torch.optim.SGD(
+            model.parameters(),
+            lr           = lr,
+            momentum     = t_cfg.get("momentum", 0.9),
+            weight_decay = weight_decay,
+        )
+    else:
+        raise ValueError(f"Unknown optimizer '{opt_type}' — choose 'adam' or 'sgd'")
+    print(f"Optimizer   : {opt_type}  (lr={lr})")
+
+    # ------------------------------------------------------------------
+    # LR Scheduler — selected from config: cosine | step
+    # ------------------------------------------------------------------
+    sched_type = t_cfg.get("scheduler", "cosine")
+    if sched_type == "cosine":
+        scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
+            optimizer, T_max=num_epochs, eta_min=t_cfg.get("eta_min", 1e-6),
+        )
+    elif sched_type == "step":
+        scheduler = torch.optim.lr_scheduler.StepLR(
+            optimizer,
+            step_size = t_cfg.get("step_size", 3),
+            gamma     = t_cfg.get("step_gamma", 0.1),
+        )
+    else:
+        raise ValueError(f"Unknown scheduler '{sched_type}' — choose 'cosine' or 'step'")
+    print(f"Scheduler   : {sched_type}")
 
     use_amp = device.type == "cuda" and t_cfg.get("amp", True)
     scaler  = torch.cuda.amp.GradScaler() if use_amp else None
@@ -396,7 +459,7 @@ def main():
         train_loss = train_one_epoch(
             model, train_loader, criterion, optimizer, device, scaler=scaler,
         )
-        val_loss, mean_auroc, comp_auroc, aurocs = evaluate(
+        val_loss, comp_auroc, _, aurocs = evaluate(
             model, valid_loader, criterion, device, label_names,
         )
 
@@ -408,8 +471,7 @@ def main():
             f"Epoch {epoch:02d}/{num_epochs} | "
             f"train_loss={train_loss:.4f} | "
             f"val_loss={val_loss:.4f} | "
-            f"auroc_5={comp_auroc:.4f} | "
-            f"auroc_14={mean_auroc:.4f} | "
+            f"val_auroc={comp_auroc:.4f} | "
             f"lr={current_lr:.2e} | "
             f"{elapsed:.0f}s"
         )
@@ -429,8 +491,7 @@ def main():
                 "epoch":                epoch,
                 "model_state_dict":     model.state_dict(),
                 "optimizer_state_dict": optimizer.state_dict(),
-                "val_auroc_5":          comp_auroc,
-                "val_auroc_14":         mean_auroc,
+                "val_auroc":            comp_auroc,
                 "val_loss":             val_loss,
                 "config":               cfg,
             }, ckpt_path)
@@ -440,12 +501,11 @@ def main():
             print(f"  No improvement ({epochs_no_improv}/{patience})")
 
         history_rows.append({
-            "epoch":        epoch,
-            "train_loss":   round(train_loss, 6),
-            "val_loss":     round(val_loss, 6),
-            "val_auroc_5":  round(comp_auroc, 6),
-            "val_auroc_14": round(mean_auroc, 6),
-            "lr":           current_lr,
+            "epoch":      epoch,
+            "train_loss": round(train_loss, 6),
+            "val_loss":   round(val_loss, 6),
+            "val_auroc":  round(comp_auroc, 6),
+            "lr":         current_lr,
         })
 
         # Early stopping

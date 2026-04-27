@@ -1,15 +1,15 @@
-# Experiment 2 — Gaussian Blur (shape bias): blurred train images, original validation.
-# Stylized images already generated in src/data/1 with _gb suffix.
+# Nick — Gaussian Blur (shape bias)
+# Results → results/michael/gb/
 
 seed: 42
 
 paths:
   image_root:          src/data/1
   train_parquet:       src/data/train_manifest_gb.parquet
-  train_parquet_blend: src/data/train_manifest.parquet   # original images for blending
+  train_parquet_blend: src/data/train_manifest.parquet
   valid_parquet:       src/data/valid_manifest.parquet
   test_parquet:        src/data/test_manifest_gb.parquet
-  output_dir:          results/gb/
+  output_dir:          results/michael/gb/
 
 labels:
   - Enlarged Cardiomediastinum
@@ -24,34 +24,23 @@ model:
   pretrained:  true
 
 training:
-  # --- Loss ---
   loss:                     focal
   focal_gamma:              2.0
-
-  # --- Sampler & blending ---
   weighted_sampler:         true
-  blend_ratio:              0.3     # 30% gaussian-blur + 70% original
-
-  # --- Optimizer ---
+  blend_ratio:              0.3     # 30% blurred + 70% original
   optimizer:                adam
   learning_rate:            0.0001
   betas:                    [0.9, 0.999]
   eps:                      1.0e-8
   momentum:                 0.9
   weight_decay:             1.0e-5
-
-  # --- Scheduler ---
   scheduler:                cosine
   eta_min:                  1.0e-6
   step_size:                3
   step_gamma:               0.1
-
-  # --- Augmentation ---
   augmentation:
     horizontal_flip:        true
     color_jitter:           0.15
-
-  # --- General ---
   batch_size:               16
   num_epochs:               10
   img_size:                 224
