@@ -1,0 +1,66 @@
+# Experiment 2 — Gaussian Blur (shape bias): blurred train images, original validation.
+# Stylized images already generated in src/data/1 with _gb suffix.
+
+seed: 42
+
+paths:
+  image_root:          src/data/1
+  train_parquet:       src/data/train_manifest_gb.parquet
+  train_parquet_blend: src/data/train_manifest.parquet   # original images for blending
+  valid_parquet:       src/data/valid_manifest.parquet
+  test_parquet:        src/data/test_manifest_gb.parquet
+  output_dir:          results/gb/
+
+labels:
+  - Enlarged Cardiomediastinum
+  - Cardiomegaly
+  - Lung Opacity
+  - Edema
+  - Pneumonia
+  - Support Devices
+  - Consolidation
+  - Atelectasis
+  - Pneumothorax
+  - Pleural Effusion
+  - Pleural Other
+
+
+model:
+  name:        densenet121
+  pretrained:  true
+
+training:
+  # --- Loss ---
+  loss:                     bce   # focal | bce
+  focal_gamma:              2.0     # only used when loss: focal
+
+  # --- Sampler & blending ---
+  weighted_sampler:         false
+  blend_ratio:              0.5     # 1.0 = no blending (original uses only its own images)
+
+  # --- Optimizer ---
+  optimizer:                adam    # adam | sgd
+  learning_rate:            0.0001
+  betas:                    [0.9, 0.999]  # adam only
+  eps:                      1.0e-8        # adam only
+  momentum:                 0.9           # sgd only
+  weight_decay:             1.0e-5
+
+  # --- Scheduler ---
+  scheduler:                cosine  # cosine | step
+  eta_min:                  1.0e-6  # cosine only — floor LR
+  step_size:                3       # step only — decay every N epochs
+  step_gamma:               0.1     # step only — multiply LR by this
+
+  # --- Augmentation ---
+  augmentation:
+    horizontal_flip:        false
+    color_jitter:           0.0    # 0.0 to disable
+
+  # --- General ---
+  batch_size:               128
+  num_epochs:               10
+  img_size:                 224
+  num_workers:              8
+  amp:                      true
+  early_stopping_patience:  7
