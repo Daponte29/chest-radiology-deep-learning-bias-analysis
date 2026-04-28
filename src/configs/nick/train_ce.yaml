@@ -15,35 +15,57 @@ labels:
   - Enlarged Cardiomediastinum
   - Cardiomegaly
   - Lung Opacity
+  - Lung Lesion
   - Edema
+  - Consolidation
   - Pneumonia
+  - Atelectasis
+  - Pneumothorax
+  - Pleural Effusion
+  - Pleural Other
+  - Fracture
+  - No Finding
   - Support Devices
 
 model:
-  name:        densenet121
-  pretrained:  true
+  name:       densenet121  # options: densenet121 | densenet169 | densenet201
+  pretrained: true         # true = ImageNet weights | false = train from scratch
 
 training:
-  loss:                     focal
-  focal_gamma:              2.0
-  weighted_sampler:         true
-  blend_ratio:              0.3     # 30% edge-filtered + 70% original
-  optimizer:                adam
-  learning_rate:            0.0001
-  betas:                    [0.9, 0.999]
-  eps:                      1.0e-8
-  momentum:                 0.9
-  weight_decay:             1.0e-5
-  scheduler:                cosine
-  eta_min:                  1.0e-6
-  step_size:                3
-  step_gamma:               0.1
+
+  # Loss function ---------------------------------------------------------------
+  loss:        focal  # options: focal | bce
+  focal_gamma: 1.5    # focal only — focusing strength. 0.0 = same as bce. typical range: 1.0–3.0
+
+  # Class imbalance -------------------------------------------------------------
+  weighted_sampler: true  # true = upsample rare-label images | false = uniform sampling
+
+  # Blending --------------------------------------------------------------------
+  blend_ratio: 0.5    # 0.5 = 50% edge-filtered + 50% original | 1.0 = 100% edge-filtered (no blending)
+
+  # Optimizer -------------------------------------------------------------------
+  optimizer:     adam
+  learning_rate: 0.00005
+  betas:         [0.9, 0.999]  # adam only
+  eps:           1.0e-8        # adam only
+  momentum:      0.9           # sgd only
+  weight_decay:  5.0e-5
+
+  # LR Scheduler ----------------------------------------------------------------
+  scheduler:  cosine  # options: cosine | step
+  eta_min:    1.0e-6  # cosine only — LR floor
+  step_size:  3       # step only — decay every N epochs
+  step_gamma: 0.1     # step only — multiply LR by this (0.1 = drop 10x)
+
+  # Augmentation ----------------------------------------------------------------
   augmentation:
-    horizontal_flip:        true
-    color_jitter:           0.15
-  batch_size:               16
-  num_epochs:               10
-  img_size:                 224
-  num_workers:              4
-  amp:                      true
-  early_stopping_patience:  3
+    horizontal_flip: true   # true | false
+    color_jitter:    0.1    # brightness/contrast jitter | 0.0 to disable
+
+  # General ---------------------------------------------------------------------
+  batch_size:              128
+  num_epochs:              15
+  img_size:                224
+  num_workers:             8     # 0 to disable multiprocessing
+  amp:                     true  # mixed precision | false if issues arise
+  early_stopping_patience: 3     # stops training if validation auc doesn't improve for this many epochs

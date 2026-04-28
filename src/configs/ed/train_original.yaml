@@ -1,15 +1,18 @@
-# Nick — Baseline (original images)
+# Ed — Baseline — train on original unmodified CheXpert images.
+# Establishes the performance ceiling before any style-transfer bias is introduced.
 # Results → results/ed/original/
 
 seed: 42
 
 paths:
-  image_root:    src/data/1
+  image_root:    src/data/1                        # root folder containing train/ and valid/
   train_parquet: src/data/train_manifest.parquet
   valid_parquet: src/data/valid_manifest.parquet
   test_parquet:  src/data/test_manifest.parquet
-  output_dir:    results/ed/original/
+  output_dir:    results/ed/original/                 # best_model.pth and training_history.parquet saved here
 
+# Labels to train on. Remove any entry to exclude it.
+# Delete this entire block to use all 14 CheXpert labels instead.
 labels:
   - Enlarged Cardiomediastinum
   - Cardiomegaly
@@ -19,30 +22,52 @@ labels:
   - Support Devices
 
 model:
-  name:        densenet121
-  pretrained:  true
+  name:       densenet121  # options: densenet121 | densenet169 | densenet201
+  pretrained: true         # true = start from ImageNet weights | false = train from scratch
 
 training:
-  loss:                     focal   # focal | bce
-  focal_gamma:              2.0
-  weighted_sampler:         true
-  blend_ratio:              1.0
-  optimizer:                adam    # adam | sgd
-  learning_rate:            0.0001
-  betas:                    [0.9, 0.999]
-  eps:                      1.0e-8
-  momentum:                 0.9
-  weight_decay:             1.0e-5
-  scheduler:                cosine  # cosine | step
-  eta_min:                  1.0e-6
-  step_size:                3
-  step_gamma:               0.1
+
+  # Loss function ---------------------------------------------------------------
+  loss:        focal  # options: focal | bce
+                      #   focal — down-weights easy negatives, better for rare labels
+                      #   bce   — standard binary cross-entropy, simpler baseline
+  focal_gamma: 2.0    # focal only — focusing strength. higher = more focus on hard examples
+                      # 0.0 = mathematically identical to bce. typical range: 1.0–3.0
+
+  # Class imbalance -------------------------------------------------------------
+  weighted_sampler: true  # true = upsample rare-label images each epoch | false = uniform sampling
+
+  # Blending (biased models only) -----------------------------------------------
+  blend_ratio: 1.0    # fraction of stylized images in the training set (0.0–1.0)
+                      # 1.0 = 100% stylized, no blending (use this for the baseline)
+                      # 0.3 = 30% stylized + 70% original
+                      # requires paths.train_parquet_blend to point to the original manifest
+
+  # Optimizer -------------------------------------------------------------------
+  optimizer:     adam    # options: adam | sgd
+  learning_rate: 0.0001
+  betas:         [0.9, 0.999]  # adam only — momentum decay rates for gradient and squared gradient
+  eps:           1.0e-8        # adam only — small constant for numerical stability
+  momentum:      0.9           # sgd only — ignored when optimizer is adam
+  weight_decay:  1.0e-5        # L2 regularization — increase (e.g. 5e-5) to fight overfitting
+
+  # LR Scheduler ----------------------------------------------------------------
+  scheduler:  cosine  # options: cosine | step
+                      #   cosine — smoothly decays LR from learning_rate to eta_min (recommended)
+                      #   step   — drops LR by step_gamma every step_size epochs
+  eta_min:    1.0e-6  # cosine only — LR floor at the end of training
+  step_size:  3       # step only  — decay LR every N epochs
+  step_gamma: 0.1     # step only  — multiply LR by this at each step (0.1 = drop by 10x)
+
+  # Augmentation (applied to training images only, never val/test) --------------
   augmentation:
-    horizontal_flip:        true
-    color_jitter:           0.15
-  batch_size:               16
-  num_epochs:               10
-  img_size:                 224
-  num_workers:              4
-  amp:                      true
-  early_stopping_patience:  3
+    horizontal_flip: true   # true | false — random left/right flip each batch
+    color_jitter:    0.15   # brightness and contrast jitter strength | 0.0 to disable entirely
+
+  # General ---------------------------------------------------------------------
+  batch_size:              16
+  num_epochs:              10
+  img_size:                224   # resize all images to this square resolution in pixels
+  num_workers:             4     # parallel data loading workers | set 0 to disable (helps debugging)
+  amp:                     true  # mixed precision (float16) — faster on CUDA | false if you hit issues
+  early_stopping_patience: 3     # stops training if validation auc doesn't improve for this many epochs

@@ -33,11 +33,6 @@ IMG_SIZE    = 224
 BATCH_SIZE  = 16
 NUM_WORKERS = 4
 
-LABEL_NAMES = [
-    "Enlarged Cardiomediastinum", "Cardiomegaly", "Lung Opacity",
-    "Edema", "Pneumonia", "Support Devices",
-]
-
 BIASED_MODELS = {
     "gb": "results/gb/best_model.pth",
     "ps": "results/ps/best_model.pth",
@@ -65,12 +60,21 @@ def mean_auroc(aurocs: list[tuple[str, float]]) -> float:
     return float(np.mean(scores)) if scores else float("nan")
 
 
-def build_loader(parquet: str) -> DataLoader:
+def read_ckpt_labels(ckpt_path: str, device: torch.device) -> tuple[list[str], str]:
+    """Return (label_names, model_variant) from a saved checkpoint's config."""
+    ckpt = torch.load(ckpt_path, map_location=device)
+    cfg  = ckpt.get("config", {})
+    labels  = cfg.get("labels") or CheXpertDataset.DEFAULT_LABELS
+    variant = cfg.get("model", {}).get("name", "densenet121")
+    return labels, variant
+
+
+def build_loader(parquet: str, label_names: list[str]) -> DataLoader:
     dataset = CheXpertDataset(
         manifest_path  = parquet,
         image_root_dir = IMAGE_ROOT,
         transform      = build_transform(IMG_SIZE),
-        target_cols    = LABEL_NAMES,
+        target_cols    = label_names,
     )
     return DataLoader(
         dataset, batch_size=BATCH_SIZE, shuffle=False,
@@ -79,15 +83,16 @@ def build_loader(parquet: str) -> DataLoader:
     )
 
 
-def load_model(ckpt_path: str, device: torch.device) -> DenseNetClassifier:
+def load_model(ckpt_path: str, device: torch.device,
+               label_names: list[str], variant: str) -> DenseNetClassifier:
     model = DenseNetClassifier(
-        num_classes = len(LABEL_NAMES),
+        num_classes = len(label_names),
         pretrained  = False,
-        variant     = "densenet121",
+        variant     = variant,
     ).to(device)
     ckpt = torch.load(ckpt_path, map_location=device)
     model.load_state_dict(ckpt["model_state_dict"])
-    print(f"  Loaded {ckpt_path}  (epoch {ckpt.get('epoch', '?')})")
+    print(f"  Loaded {ckpt_path}  (epoch {ckpt.get('epoch', '?')}, labels={len(label_names)})")
     return model
 
 
@@ -119,9 +124,6 @@ def main():
     print(f"Output dir  : {output_dir}\n")
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    print("Building test loaders...")
-    loaders = {name: build_loader(parquet) for name, parquet in TEST_SETS.items()}
-
     auc_matrix:       dict[str, dict[str, float]] = {}
     per_label_results: dict[str, dict[str, dict]] = {}
 
@@ -134,13 +136,19 @@ def main():
             print("  SKIPPING — checkpoint not found")
             continue
 
-        model = load_model(ckpt_path, device)
+        label_names, variant = read_ckpt_labels(ckpt_path, device)
+        print(f"  Labels ({len(label_names)}): {label_names}")
+
+        print("  Building test loaders...")
+        loaders = {name: build_loader(parquet, label_names) for name, parquet in TEST_SETS.items()}
+
+        model = load_model(ckpt_path, device, label_names, variant)
         auc_matrix[model_name]        = {}
         per_label_results[model_name] = {}
 
         for test_name, loader in loaders.items():
             print(f"  Running test set: {test_name}")
-            aurocs = run_evaluation(model, loader, device, LABEL_NAMES)
+            aurocs = run_evaluation(model, loader, device, label_names)
             score  = mean_auroc(aurocs)
             auc_matrix[model_name][test_name]        = round(score, 6)
             per_label_results[model_name][test_name] = {n: round(s, 6) for n, s in aurocs}

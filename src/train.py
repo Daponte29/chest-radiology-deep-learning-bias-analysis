@@ -27,6 +27,7 @@ import os
 os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
 
 import argparse
+import shutil
 import time
 from pathlib import Path
 
@@ -429,6 +430,7 @@ def main():
     # ------------------------------------------------------------------
     output_dir = Path(cfg["paths"]["output_dir"])
     output_dir.mkdir(parents=True, exist_ok=True)
+    shutil.copy(args.config, output_dir / "config.yaml")
 
     # ------------------------------------------------------------------
     # Optionally resume from checkpoint
