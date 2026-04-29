@@ -1,0 +1,19 @@
+{
+  "auroc_mean": 0.776192,
+  "per_label": {
+    "Enlarged Cardiomediastinum": 0.666372,
+    "Cardiomegaly": 0.794452,
+    "Lung Opacity": 0.828758,
+    "Lung Lesion": 0.442786,
+    "Edema": 0.879613,
+    "Consolidation": 0.848162,
+    "Pneumonia": 0.642397,
+    "Atelectasis": 0.751391,
+    "Pneumothorax": 0.683516,
+    "Pleural Effusion": 0.866282,
+    "Pleural Other": 0.995025,
+    "Fracture": NaN,
+    "No Finding": 0.880026,
+    "Support Devices": 0.811709
+  }
+}

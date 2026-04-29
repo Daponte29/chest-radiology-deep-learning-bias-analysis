@@ -15,7 +15,7 @@ jobs:
           python-version: "3.11"
 
       - name: Install dependencies
-        run: pip install pytest torch torchvision polars scikit-learn Pillow numpy
+        run: pip install pytest torch torchvision polars scikit-learn Pillow numpy opencv-python
 
       - name: Run tests
         run: pytest tests/ -v
