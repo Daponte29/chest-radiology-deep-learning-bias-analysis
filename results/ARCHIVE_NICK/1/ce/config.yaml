@@ -34,7 +34,7 @@ model:
 training:
 
   # Loss function ---------------------------------------------------------------
-  loss:        bce    # options: focal | bce
+  loss:        focal  # options: focal | bce
   focal_gamma: 1.5    # focal only — focusing strength. 0.0 = same as bce. typical range: 1.0–3.0
 
   # Class imbalance -------------------------------------------------------------
@@ -45,11 +45,11 @@ training:
 
   # Optimizer -------------------------------------------------------------------
   optimizer:     adam
-  learning_rate: 0.0001
+  learning_rate: 0.00005
   betas:         [0.9, 0.999]  # adam only
   eps:           1.0e-8        # adam only
   momentum:      0.9           # sgd only
-  weight_decay:  1.0e-5
+  weight_decay:  5.0e-5
 
   # LR Scheduler ----------------------------------------------------------------
   scheduler:  cosine  # options: cosine | step
@@ -68,4 +68,4 @@ training:
   img_size:                224
   num_workers:             8     # 0 to disable multiprocessing
   amp:                     true  # mixed precision | false if issues arise
-  early_stopping_patience: 5     # stops training if validation auc doesn't improve for this many epochs
+  early_stopping_patience: 3     # stops training if validation auc doesn't improve for this many epochs

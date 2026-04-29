@@ -1,15 +1,15 @@
-# Nick — Canny Edge (shape bias)
-# Results → results/nick/ce/
+# Nick — Patch Shuffle (texture bias)
+# Results → results/nick/ps/
 
 seed: 42
 
 paths:
   image_root:          src/data/1
-  train_parquet:       src/data/train_manifest_ce.parquet
+  train_parquet:       src/data/train_manifest_ps.parquet
   train_parquet_blend: src/data/train_manifest.parquet
   valid_parquet:       src/data/valid_manifest.parquet
-  test_parquet:        src/data/test_manifest_ce.parquet
-  output_dir:          results/nick/ce/
+  test_parquet:        src/data/test_manifest_ps.parquet
+  output_dir:          results/nick/ps/
 
 labels:
   - Enlarged Cardiomediastinum
@@ -34,22 +34,22 @@ model:
 training:
 
   # Loss function ---------------------------------------------------------------
-  loss:        bce    # options: focal | bce
+  loss:        focal  # options: focal | bce
   focal_gamma: 1.5    # focal only — focusing strength. 0.0 = same as bce. typical range: 1.0–3.0
 
   # Class imbalance -------------------------------------------------------------
   weighted_sampler: true  # true = upsample rare-label images | false = uniform sampling
 
   # Blending --------------------------------------------------------------------
-  blend_ratio: 0.5    # 0.5 = 50% edge-filtered + 50% original | 1.0 = 100% edge-filtered (no blending)
+  blend_ratio: 0.5    # 0.5 = 50% shuffled + 50% original | 1.0 = 100% shuffled (no blending)
 
   # Optimizer -------------------------------------------------------------------
   optimizer:     adam
-  learning_rate: 0.0001
+  learning_rate: 0.00005
   betas:         [0.9, 0.999]  # adam only
   eps:           1.0e-8        # adam only
   momentum:      0.9           # sgd only
-  weight_decay:  1.0e-5
+  weight_decay:  5.0e-5
 
   # LR Scheduler ----------------------------------------------------------------
   scheduler:  cosine  # options: cosine | step
@@ -68,4 +68,4 @@ training:
   img_size:                224
   num_workers:             8     # 0 to disable multiprocessing
   amp:                     true  # mixed precision | false if issues arise
-  early_stopping_patience: 5     # stops training if validation auc doesn't improve for this many epochs
+  early_stopping_patience: 3     # stops training if validation auc doesn't improve for this many epochs

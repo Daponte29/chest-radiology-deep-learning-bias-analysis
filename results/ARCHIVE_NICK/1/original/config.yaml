@@ -1,15 +1,14 @@
-# Nick — Canny Edge (shape bias)
-# Results → results/nick/ce/
+# Nick — Baseline (original images)
+# Results → results/nick/original/
 
 seed: 42
 
 paths:
-  image_root:          src/data/1
-  train_parquet:       src/data/train_manifest_ce.parquet
-  train_parquet_blend: src/data/train_manifest.parquet
-  valid_parquet:       src/data/valid_manifest.parquet
-  test_parquet:        src/data/test_manifest_ce.parquet
-  output_dir:          results/nick/ce/
+  image_root:    src/data/1
+  train_parquet: src/data/train_manifest.parquet
+  valid_parquet: src/data/valid_manifest.parquet
+  test_parquet:  src/data/test_manifest.parquet
+  output_dir:    results/nick/original/
 
 labels:
   - Enlarged Cardiomediastinum
@@ -34,22 +33,22 @@ model:
 training:
 
   # Loss function ---------------------------------------------------------------
-  loss:        bce    # options: focal | bce
+  loss:        focal  # options: focal | bce
   focal_gamma: 1.5    # focal only — focusing strength. 0.0 = same as bce. typical range: 1.0–3.0
 
   # Class imbalance -------------------------------------------------------------
   weighted_sampler: true  # true = upsample rare-label images | false = uniform sampling
 
   # Blending --------------------------------------------------------------------
-  blend_ratio: 0.5    # 0.5 = 50% edge-filtered + 50% original | 1.0 = 100% edge-filtered (no blending)
+  blend_ratio: 1.0    # 1.0 = no blending (baseline uses only original images). 0.3 means 30% patch shuffle train images and 70% original train images.
 
   # Optimizer -------------------------------------------------------------------
-  optimizer:     adam
-  learning_rate: 0.0001
+  optimizer:     adam    # options: adam | sgd
+  learning_rate: 0.00005  # halved from default — model peaked at epoch 3, was learning too fast
   betas:         [0.9, 0.999]  # adam only
   eps:           1.0e-8        # adam only
   momentum:      0.9           # sgd only
-  weight_decay:  1.0e-5
+  weight_decay:  5.0e-5        # slightly more regularization to slow overfitting
 
   # LR Scheduler ----------------------------------------------------------------
   scheduler:  cosine  # options: cosine | step
@@ -60,12 +59,12 @@ training:
   # Augmentation ----------------------------------------------------------------
   augmentation:
     horizontal_flip: true   # true | false
-    color_jitter:    0.1    # brightness/contrast jitter | 0.0 to disable
+    color_jitter:    0.1    # reduced from 0.15 — X-rays don't vary in color like natural images | 0.0 to disable
 
   # General ---------------------------------------------------------------------
   batch_size:              128
-  num_epochs:              15
+  num_epochs:              15    # more room since LR is lower
   img_size:                224
   num_workers:             8     # 0 to disable multiprocessing
   amp:                     true  # mixed precision | false if issues arise
-  early_stopping_patience: 5     # stops training if validation auc doesn't improve for this many epochs
+  early_stopping_patience: 3     # stops training if validation auc doesn't improve for this many epochs

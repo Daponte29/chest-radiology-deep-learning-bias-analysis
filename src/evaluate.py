@@ -27,11 +27,6 @@ from src.models.densenet import DenseNetClassifier
 IMAGENET_MEAN = [0.485, 0.456, 0.406]
 IMAGENET_STD  = [0.229, 0.224, 0.225]
 
-TARGET_LABELS = [
-    "Enlarged Cardiomediastinum", "Cardiomegaly", "Lung Opacity",
-    "Edema", "Pneumonia", "Support Devices",
-]
-
 
 def load_config(path: str) -> dict:
     with open(path) as f:
