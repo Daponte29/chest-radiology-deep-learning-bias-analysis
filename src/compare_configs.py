@@ -1,9 +1,9 @@
 """
-compare_configs.py — Visual comparison of all training configs (Ed + Nick 1/2/3).
+compare_configs.py — Visual comparison of all training configs (Configs 1–4).
 
 Reads test_results.json from:
-  - ed_share/results/{model}/          (Ed's config)
-  - ARCHIVE_NICK/{1,2,3}/{model}/      (Nick's configs)
+  - ed_share/results/{model}/          (Config 1)
+  - ARCHIVE_NICK/{1,2,3}/{model}/      (Configs 2–4)
 
 Produces a publication-quality multi-panel figure saved to results/ARCHIVE_NICK/.
 
@@ -31,21 +31,20 @@ warnings.filterwarnings("ignore")
 parser = argparse.ArgumentParser(description="Compare training configs from archived results")
 parser.add_argument(
     "--archive-dir", default="results/ARCHIVE_NICK",
-    help="Root folder containing Nick's numbered subfolders. Default: results/ARCHIVE_NICK",
+    help="Root folder containing Configs 2–4 numbered subfolders. Default: results/ARCHIVE_NICK",
 )
 parser.add_argument(
-    "--ed-dir", default="ed_share/results",
-    help="Folder containing Ed's per-model result subdirs. Default: ed_share/results",
+    "--config1-dir", default="ed_share/results",
+    help="Folder containing Config 1 per-model result subdirs. Default: ed_share/results",
 )
 args = parser.parse_args()
 
 ARCHIVE_ROOT = Path(args.archive_dir)
-ED_ROOT      = Path(args.ed_dir)
+ED_ROOT      = Path(args.config1_dir)
 
-# Ed first (best baseline), then Nick's three configs in run order.
 CONFIGS = {
-    "Ed's Config\nBCE, No Sampler": {
-        "base_dir": ED_ROOT,       # direct parent of model subdirs
+    "Config 1\nBCE, No Sampler": {
+        "base_dir": ED_ROOT,
         "loss": "BCE",
         "sampler": "No",
         "lr": "1e-4",
@@ -53,7 +52,7 @@ CONFIGS = {
         "labels": "11",
         "color": "#B07FE0",
     },
-    "Nick Config 1\nFocal γ=1.5 + Sampler": {
+    "Config 2\nFocal γ=1.5 + Sampler": {
         "base_dir": ARCHIVE_ROOT / "1",
         "loss": "Focal  γ=1.5",
         "sampler": "Yes",
@@ -62,7 +61,7 @@ CONFIGS = {
         "labels": "14",
         "color": "#E07B39",
     },
-    "Nick Config 2\nBCE + Sampler": {
+    "Config 3\nBCE + Sampler": {
         "base_dir": ARCHIVE_ROOT / "2",
         "loss": "BCE",
         "sampler": "Yes",
@@ -71,7 +70,7 @@ CONFIGS = {
         "labels": "14",
         "color": "#4878CF",
     },
-    "Nick Config 3\nFocal γ=2.0, No Sampler": {
+    "Config 4\nFocal γ=2.0, No Sampler": {
         "base_dir": ARCHIVE_ROOT / "3",
         "loss": "Focal  γ=2.0",
         "sampler": "No",
@@ -92,7 +91,7 @@ MODEL_LABELS = {
 }
 
 # All 14 CheXpert labels minus Fracture (always NaN in all runs).
-# Labels Ed didn't train on (Lung Lesion, No Finding) will appear as N/A in heatmaps.
+# Labels Config 1 didn't train on (Lung Lesion, No Finding) will appear as N/A in heatmaps.
 LABEL_ORDER = [
     "Support Devices", "No Finding", "Pleural Effusion", "Pleural Other",
     "Lung Opacity", "Edema", "Consolidation", "Atelectasis",
@@ -171,10 +170,10 @@ col_x       = [0.01, 0.19, 0.34, 0.46, 0.57, 0.67, 0.76]
 row_y = [0.82, 0.60, 0.38, 0.16]
 
 config_rows = [
-    ["Ed's Config  —  BCE, No Sampler",          "BCE",               "✗  No",  "1e-4",  "1e-5", "11", "Best overall AUROC"],
-    ["Nick Config 1  —  Focal γ=1.5 + Sampler",  "Focal Loss  γ=1.5", "✓  Yes", "5e-5",  "5e-5", "14", "Instability study"],
-    ["Nick Config 2  —  BCE + Sampler",           "BCE",               "✓  Yes", "1e-4",  "1e-5", "14", "Sampler-only fix"],
-    ["Nick Config 3  —  Focal γ=2.0, No Sampler", "Focal Loss  γ=2.0", "✗  No", "1e-4",  "1e-5", "14", "Focal-only fix"],
+    ["Config 1  —  BCE, No Sampler",          "BCE",               "✗  No",  "1e-4",  "1e-5", "11", "Best overall AUROC"],
+    ["Config 2  —  Focal γ=1.5 + Sampler",    "Focal Loss  γ=1.5", "✓  Yes", "5e-5",  "5e-5", "14", "Instability study"],
+    ["Config 3  —  BCE + Sampler",             "BCE",               "✓  Yes", "1e-4",  "1e-5", "14", "Sampler-only fix"],
+    ["Config 4  —  Focal γ=2.0, No Sampler",   "Focal Loss  γ=2.0", "✗  No", "1e-4",  "1e-5", "14", "Focal-only fix"],
 ]
 
 header_props = dict(fontsize=9, color="#aab0c4", fontweight="bold", ha="left", va="center",
@@ -203,7 +202,7 @@ for (cfg_label, meta), row_data, y in zip(config_items, config_rows, row_y):
     ax_table.axhline(y - row_height * 0.46, color=GRID_COLOR, linewidth=0.5)
 
 ax_table.set_title(
-    "Training Configuration Comparison  —  Ed & Nick Experiment Grid",
+    "Training Configuration Comparison  —  Experiment Grid",
     color=TEXT_COLOR, fontsize=13, fontweight="bold", loc="left", pad=8,
 )
 
@@ -291,11 +290,11 @@ cbar.ax.yaxis.set_tick_params(color=TEXT_COLOR, labelcolor=TEXT_COLOR)
 cbar.set_label("AUROC", color=TEXT_COLOR, fontsize=9)
 
 ax_heat.set_title("Per-Label AUROC — Original Model (all configs)\n"
-                  "N/A = label not in Ed's 11-label training set",
+                  "N/A = label not in Config 1's 11-label training set",
                   color=TEXT_COLOR, fontsize=10, fontweight="bold", loc="left")
 
 # ---------------------------------------------------------------------------
-# Panel 3 — Ed's config per-label across all 5 model variants
+# Panel 3 — Config 1 per-label across all 5 model variants
 # ---------------------------------------------------------------------------
 
 ax_heat2 = fig.add_subplot(gs[2, 1])
@@ -338,7 +337,7 @@ cbar2 = fig.colorbar(im2, ax=ax_heat2, fraction=0.046, pad=0.04)
 cbar2.ax.yaxis.set_tick_params(color=TEXT_COLOR, labelcolor=TEXT_COLOR)
 cbar2.set_label("AUROC", color=TEXT_COLOR, fontsize=9)
 
-ax_heat2.set_title("Ed's Config — Per-Label AUROC Across All 5 Model Variants\n"
+ax_heat2.set_title("Config 1 — Per-Label AUROC Across All 5 Model Variants\n"
                    "(highest-performing config, 11 labels)",
                    color=TEXT_COLOR, fontsize=10, fontweight="bold", loc="left")
 
@@ -347,7 +346,7 @@ ax_heat2.set_title("Ed's Config — Per-Label AUROC Across All 5 Model Variants\
 # ---------------------------------------------------------------------------
 
 fig.suptitle(
-    "Shape vs. Texture Bias — DenseNet121 on CheXpert  |  Training Config Ablation Study  (Ed + Nick)",
+    "Shape vs. Texture Bias — DenseNet121 on CheXpert  |  Training Config Ablation Study",
     color=TEXT_COLOR, fontsize=14, fontweight="bold", y=0.975,
 )
 

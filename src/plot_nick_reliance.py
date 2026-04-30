@@ -1,5 +1,5 @@
 """
-plot_nick_reliance.py — Matching vs opposing reliance for Nick's 3 configs.
+plot_nick_reliance.py — Matching vs opposing reliance for Configs 2, 3 & 4.
 
 Reads bias_eval/reliance.json from ARCHIVE_NICK/{1,2,3}/ and produces a
 2×2 panel figure (one panel per biased model) saved to results/ARCHIVE_NICK/.
@@ -25,9 +25,9 @@ warnings.filterwarnings("ignore")
 ARCHIVE_ROOT = Path("results/ARCHIVE_NICK")
 
 CONFIGS = {
-    "Config 1\nFocal γ=1.5 + Sampler": {"folder": "1", "color": "#E07B39"},
-    "Config 2\nBCE + Sampler":          {"folder": "2", "color": "#4878CF"},
-    "Config 3\nFocal γ=2.0, No Sampler": {"folder": "3", "color": "#6ACC65"},
+    "Config 2\nFocal γ=1.5 + Sampler": {"folder": "1", "color": "#E07B39"},
+    "Config 3\nBCE + Sampler":          {"folder": "2", "color": "#4878CF"},
+    "Config 4\nFocal γ=2.0, No Sampler": {"folder": "3", "color": "#6ACC65"},
 }
 
 # Correct definitions (fixed from original bias_eval run)
@@ -183,7 +183,7 @@ fig.legend(handles=legend_handles, loc="lower center", ncol=n_configs,
            labelcolor=TEXT_COLOR, fontsize=9, bbox_to_anchor=(0.5, -0.02))
 
 fig.suptitle(
-    "Bias-Eval Reliance Ratios — Nick's 3 Configs  |  Matching vs Opposing (corrected bias definitions)",
+    "Bias-Eval Reliance Ratios — Configs 2, 3 & 4  |  Matching vs Opposing (corrected bias definitions)",
     color=TEXT_COLOR, fontsize=13, fontweight="bold", y=1.01,
 )
 fig.tight_layout(rect=[0, 0.05, 1, 1])

@@ -4,7 +4,7 @@
 
 
 
-**Project:** Chest Radiology Deep Learning Bias Analysis**Authors:** Ed, Nick**Model:** DenseNet121 (ImageNet pretrained, fully fine-tuned)**Dataset:** CheXpert frontal radiographs**Date:** April 2026
+**Project:** Chest Radiology Deep Learning Bias Analysis**Model:** DenseNet121 (ImageNet pretrained, fully fine-tuned)**Dataset:** CheXpert frontal radiographs**Date:** April 2026
 
 
 ---
@@ -42,8 +42,8 @@ Do DenseNet121 models trained on CheXpert chest X-rays rely primarily on **textu
 
 * **Source:** CheXpert (Stanford) — frontal-view chest radiographs
 * **Labels evaluated:**
-  * Ed's config (11 labels): Enlarged Cardiomediastinum, Cardiomegaly, Lung Opacity, Edema, Pneumonia, Support Devices, Consolidation, Atelectasis, Pneumothorax, Pleural Effusion, Pleural Other
-  * Nick's configs (14 labels): above + Lung Lesion, Fracture, No Finding
+  * Config 1 (11 labels): Enlarged Cardiomediastinum, Cardiomegaly, Lung Opacity, Edema, Pneumonia, Support Devices, Consolidation, Atelectasis, Pneumothorax, Pleural Effusion, Pleural Other
+  * Configs 2–4 (14 labels): above + Lung Lesion, Fracture, No Finding
   * *Fracture excluded from all reported results — no positive examples in test split (AUROC = NaN for all runs)*
 * **Evaluation metric:** AUROC (Area Under the ROC Curve), macro-averaged across all non-NaN labels
 
@@ -98,20 +98,20 @@ Four configurations were tested across all 5 model variants, totalling 20 traini
 
 | Config | Loss | Weighted Sampler | LR | Weight Decay | Labels | Patience | Aug |
 |----|----|----|----|----|----|----|----|
-| **Ed's Config** | BCE | No | 1e-4 | 1e-5 | 11 | 7 | None |
-| **Nick Config 1** | Focal γ=1.5 | Yes | 5e-5 | 5e-5 | 14 | 5 | H-flip, jitter=0.1 |
-| **Nick Config 2** | BCE | Yes | 1e-4 | 1e-5 | 14 | 5 | H-flip, jitter=0.1 |
-| **Nick Config 3** | Focal γ=2.0 | No | 1e-4 | 1e-5 | 14 | 5 | H-flip, jitter=0.1 |
+| **Config 1** | BCE | No | 1e-4 | 1e-5 | 11 | 7 | None |
+| **Config 2** | Focal γ=1.5 | Yes | 5e-5 | 5e-5 | 14 | 5 | H-flip, jitter=0.1 |
+| **Config 3** | BCE | Yes | 1e-4 | 1e-5 | 14 | 5 | H-flip, jitter=0.1 |
+| **Config 4** | Focal γ=2.0 | No | 1e-4 | 1e-5 | 14 | 5 | H-flip, jitter=0.1 |
 
 ### Why We Tested These Configs
 
-**Config 1 (Focal γ=1.5 + Sampler)** was the initial attempt at addressing class imbalance by combining two strategies simultaneously. Focal loss down-weights easy negatives during loss computation; the weighted sampler oversamples images containing rare labels during batch construction. These two mechanisms **double-count** the imbalance correction — rare label images are presented more often AND each instance is weighted more heavily in the loss. This caused validation loss curves to increase rather than converge, which we interpreted as instability from over-correcting the imbalance.
+**Config 2 (Focal γ=1.5 + Sampler)** was the initial attempt at addressing class imbalance by combining two strategies simultaneously. Focal loss down-weights easy negatives during loss computation; the weighted sampler oversamples images containing rare labels during batch construction. These two mechanisms **double-count** the imbalance correction — rare label images are presented more often AND each instance is weighted more heavily in the loss. This caused validation loss curves to increase rather than converge, which we interpreted as instability from over-correcting the imbalance.
 
-**Config 2 (BCE + Sampler)** isolates the sampler alone with standard BCE loss. Removing focal loss eliminates the double-weighting. BCE is simpler and less sensitive to the imbalance correction.
+**Config 3 (BCE + Sampler)** isolates the sampler alone with standard BCE loss. Removing focal loss eliminates the double-weighting. BCE is simpler and less sensitive to the imbalance correction.
 
-**Config 3 (Focal γ=2.0, No Sampler)** isolates focal loss alone. Removing the sampler eliminates the double-weighting from the other direction. γ=2.0 is the standard focal loss setting from Lin et al. (2017). No sampler means uniform batch sampling.
+**Config 4 (Focal γ=2.0, No Sampler)** isolates focal loss alone. Removing the sampler eliminates the double-weighting from the other direction. γ=2.0 is the standard focal loss setting from Lin et al. (2017). No sampler means uniform batch sampling.
 
-**Ed's Config (BCE, No Sampler)** represents the cleanest baseline: no imbalance correction strategy, standard BCE, longer patience (7 vs 5 epochs), no augmentation, and only 11 labels (excluding the three most problematic: Lung Lesion, No Finding, Fracture).
+**Config 1 (BCE, No Sampler)** represents the cleanest baseline: no imbalance correction strategy, standard BCE, longer patience (7 vs 5 epochs), no augmentation, and only 11 labels (excluding the three most problematic: Lung Lesion, No Finding, Fracture).
 
 
 ---
@@ -124,19 +124,19 @@ All scores are mean AUROC on the **original unmodified test set**.
 
 | Config | Original | GB (texture) | PS (texture) | CE (shape) | PR (shape) |
 |----|----|----|----|----|----|
-| **Ed's Config** | **0.8423** | **0.8317** | **0.7904** | **0.7469** | **0.8121** |
-| Nick Config 1 | 0.8017 | 0.7530 | 0.7011 | 0.6650 | 0.7355 |
-| Nick Config 2 | 0.7646 | 0.7537 | 0.6843 | 0.6890 | 0.7235 |
-| Nick Config 3 | 0.8005 | 0.7961 | 0.7359 | 0.7203 | 0.7762 |
+| **Config 1** | **0.8423** | **0.8317** | **0.7904** | **0.7469** | **0.8121** |
+| Config 2 | 0.8017 | 0.7530 | 0.7011 | 0.6650 | 0.7355 |
+| Config 3 | 0.7646 | 0.7537 | 0.6843 | 0.6890 | 0.7235 |
+| Config 4 | 0.8005 | 0.7961 | 0.7359 | 0.7203 | 0.7762 |
 
 ### 3.2 Ranking
 
 
 
 
-**Best config overall:** Ed's Config — highest AUROC on every single model variant.**Best Nick config:** Config 3 (Focal γ=2.0, No Sampler) — matches Ed on the original model (0.8005 vs 0.8423) but with 14 labels vs 11.**Worst config:** Config 2 (BCE + Sampler) — lowest original model AUROC at 0.7646, suggesting the sampler alone without focal loss is ineffective.**Worst stylized model across all configs:** Canny Edge under Config 1 (0.665) — the most aggressive shape bias combined with the most unstable training setup.
+**Best config overall:** Config 1 — highest AUROC on every single model variant.**Best among Configs 2–4:** Config 4 (Focal γ=2.0, No Sampler) — comes closest to Config 1 on the original model (0.8005 vs 0.8423) with 14 labels vs 11.**Worst config:** Config 3 (BCE + Sampler) — lowest original model AUROC at 0.7646, suggesting the sampler alone without focal loss is ineffective.**Worst stylized model across all configs:** Canny Edge under Config 2 (0.665) — the most aggressive shape bias combined with the most unstable training setup.
 
-### 3.3 Interpretation: Why Ed's Config Wins
+### 3.3 Interpretation: Why Config 1 Wins
 
 
 1. **11 labels instead of 14** — Lung Lesion and No Finding are the two most problematic labels (Lung Lesion rarely exceeds 0.4 AUROC; No Finding is redundant with the others). Removing them prevents a noisy gradient signal from polluting the shared representation layers.
@@ -144,9 +144,9 @@ All scores are mean AUROC on the **original unmodified test set**.
 3. **Longer patience (7 vs 5 epochs)** — Allows more time to find a truly optimal checkpoint rather than stopping at a local plateau.
 4. **No augmentation** — Chest X-rays are acquired under controlled conditions. Horizontal flip is rarely clinically appropriate (cardiac apex, aortic arch, stomach bubble are asymmetric). Color jitter adds noise irrelevant to grayscale radiographs.
 
-### 3.4 Interpretation: Why Config 1 (Focal + Sampler) Performs Worst on Biased Models
+### 3.4 Interpretation: Why Config 2 (Focal + Sampler) Performs Worst on Biased Models
 
-The double-weighting instability affects biased model training more severely than original model training. During biased model training, the rare label images presented by the sampler are also stylized — meaning the model is simultaneously trying to learn from edge-only or shuffled-patch images AND trying to fit an over-represented minority class. The combination makes the loss landscape noisy. This explains why Config 1's shape-biased models (ce=0.665, pr=0.736) are dramatically lower than Config 3's (ce=0.720, pr=0.776) despite similar original model performance.
+The double-weighting instability affects biased model training more severely than original model training. During biased model training, the rare label images presented by the sampler are also stylized — meaning the model is simultaneously trying to learn from edge-only or shuffled-patch images AND trying to fit an over-represented minority class. The combination makes the loss landscape noisy. This explains why Config 2's shape-biased models (ce=0.665, pr=0.736) are dramatically lower than Config 4's (ce=0.720, pr=0.776) despite similar original model performance.
 
 
 ---
@@ -159,10 +159,10 @@ Reliance ratio = `stylized_AUC / original_AUC`. Values close to 1.0 indicate the
 
 | Config | gb reliance | ps reliance | Mean Texture | ce reliance | pr reliance | Mean Shape | Texture > Shape gap |
 |----|----|----|----|----|----|----|----|
-| **Ed's Config** | 0.987 | 0.938 | **0.963** | 0.887 | 0.964 | **0.926** | **+0.037** |
-| Nick Config 1 | 0.939 | 0.874 | 0.907 | 0.830 | 0.918 | 0.874 | +0.033 |
-| Nick Config 2 | 0.986 | 0.895 | 0.940 | 0.901 | 0.946 | 0.924 | +0.017 |
-| Nick Config 3 | 0.995 | 0.919 | **0.957** | 0.900 | 0.970 | **0.935** | **+0.022** |
+| **Config 1** | 0.987 | 0.938 | **0.963** | 0.887 | 0.964 | **0.926** | **+0.037** |
+| Config 2 | 0.939 | 0.874 | 0.907 | 0.830 | 0.918 | 0.874 | +0.033 |
+| Config 3 | 0.986 | 0.895 | 0.940 | 0.901 | 0.946 | 0.924 | +0.017 |
+| Config 4 | 0.995 | 0.919 | **0.957** | 0.900 | 0.970 | **0.935** | **+0.022** |
 
 ### 4.2 The Consistent Pattern: Texture Reliance > Shape Reliance
 
@@ -176,10 +176,10 @@ Within the texture-bias category, Gaussian Blur (gb) consistently shows much hig
 
 | Config | gb reliance | ps reliance | Gap |
 |----|----|----|----|
-| Ed | 0.987 | 0.938 | 0.049 |
-| Nick 1 | 0.939 | 0.874 | 0.065 |
-| Nick 2 | 0.986 | 0.895 | 0.091 |
-| Nick 3 | 0.995 | 0.919 | 0.076 |
+| Config 1 | 0.987 | 0.938 | 0.049 |
+| Config 2 | 0.939 | 0.874 | 0.065 |
+| Config 3 | 0.986 | 0.895 | 0.091 |
+| Config 4 | 0.995 | 0.919 | 0.076 |
 
 **Why:** Gaussian blur destroys fine texture but preserves global anatomy — organ silhouettes, cardiac borders, diaphragm contour, and lung field boundaries remain fully intact. The model can still read these structural cues in the test image. Patch shuffle destroys all spatial relationships — the heart is no longer in the center, the lung fields don't span the periphery, costophrenic angles are random. The model loses its anatomical spatial priors entirely. This \~0.07 average gap directly quantifies how much performance is attributable to spatial anatomy vs local texture in CXR diagnosis.
 
@@ -189,10 +189,10 @@ Within the shape-bias category, Patch Rotation (pr) consistently outperforms Can
 
 | Config | ce reliance | pr reliance | Gap |
 |----|----|----|----|
-| Ed | 0.887 | 0.964 | 0.077 |
-| Nick 1 | 0.830 | 0.918 | 0.088 |
-| Nick 2 | 0.901 | 0.946 | 0.045 |
-| Nick 3 | 0.900 | 0.970 | 0.070 |
+| Config 1 | 0.887 | 0.964 | 0.077 |
+| Config 2 | 0.830 | 0.918 | 0.088 |
+| Config 3 | 0.901 | 0.946 | 0.045 |
+| Config 4 | 0.900 | 0.970 | 0.070 |
 
 **Why:** Patch rotation is a mild spatial disruption — anatomy is preserved at the global level, only local orientation within each 32×32 block is changed. The model trained on patch-rotated images still has access to approximate anatomical layout. Canny edge detection is the most aggressive transform in this study — it strips ALL density and intensity information, leaving only binary edge outlines. Medical pathologies like Lung Opacity, Consolidation, and Edema are defined by parenchymal density changes; they have almost no edge representation in a Canny output. The ce model's training signal for these labels is near-zero.
 
@@ -201,9 +201,9 @@ Within the shape-bias category, Patch Rotation (pr) consistently outperforms Can
 
 ## 5. Per-Label Deep Dive
 
-All values below are AUROC on the original test set under Nick Config 3 (most comprehensive 14-label run).
+All values below are AUROC on the original test set under Config 4 (most comprehensive 14-label run).
 
-### 5.1 Full Per-Label Table — Nick Config 3
+### 5.1 Full Per-Label Table — Config 4
 
 | Label | Original | GB (tex) | PS (tex) | CE (shape) | PR (shape) | Best model | Interpretation |
 |----|----|----|----|----|----|----|----|
@@ -241,11 +241,11 @@ This is the most important finding: **biased models are not universally worse on
 | Pneumothorax | 0.882 | GB: 0.818 | CE: 0.638 | The visceral pleural line is visible but the absence of lung markings peripheral to it (a density/texture cue) is the key discriminator |
 | Support Devices | 0.935 | GB: 0.803 | CE: 0.778 | Lines and tubes are visible as textures (thin dense streaks); blur softens these to the point of ambiguity |
 
-### 5.4 Ed's Config Per-Label Highlights
+### 5.4 Config 1 Per-Label Highlights
 
-Ed's 11-label model shows consistently higher per-label AUROC. Noteworthy values:
+Config 1's 11-label model shows consistently higher per-label AUROC. Noteworthy values:
 
-| Label | Ed original | Nick C3 original | Ed gb | Nick C3 gb |
+| Label | Config 1 original | Config 4 original | Config 1 gb | Config 4 gb |
 |----|----|----|----|----|
 | Cardiomegaly | 0.824 | 0.789 | **0.855** | 0.843 |
 | Support Devices | **0.921** | 0.935 | 0.790 | 0.803 |
@@ -254,7 +254,7 @@ Ed's 11-label model shows consistently higher per-label AUROC. Noteworthy values
 | Pleural Effusion | **0.927** | 0.911 | 0.920 | 0.915 |
 | Pleural Other | 0.920 | 0.925 | 0.950 | 0.975 |
 
-Ed's gb model on Cardiomegaly (0.855) is the highest value observed across all configs and all models for that label — further confirming Cardiomegaly is a shape-primary diagnosis.
+Config 1's gb model on Cardiomegaly (0.855) is the highest value observed across all configs and all models for that label — further confirming Cardiomegaly is a shape-primary diagnosis.
 
 
 ---
@@ -306,10 +306,10 @@ The texture reliance advantage (mean texture ratio − mean shape ratio) is posi
 
 | Config | Texture − Shape advantage |
 |----|----|
-| Ed | +0.037 |
-| Nick 1 | +0.033 |
-| Nick 2 | +0.017 |
-| Nick 3 | +0.022 |
+| Config 1 | +0.037 |
+| Config 2 | +0.033 |
+| Config 3 | +0.017 |
+| Config 4 | +0.022 |
 
 ### Finding 2: Biased Models Are Not Universally Worse
 
@@ -319,9 +319,9 @@ Cardiomegaly, Pleural Other, Enlarged Cardiomediastinum, and Lung Lesion all sho
 
 The combined focal+sampler approach shows the highest variance and worst biased model performance, particularly for shape-biased models. The double-correction of class imbalance destabilizes training, especially when the training images are already low-signal (edge maps).
 
-### Finding 4: Ed's 11-Label Config Is the Best Baseline
+### Finding 4: Config 1 Is the Best Baseline
 
-Across all 5 model variants, Ed's config achieves the highest AUROC. The label scope reduction (removing Lung Lesion, Fracture, No Finding) and simpler training setup (BCE, no sampler, no augmentation, longer patience) produce a cleaner, more robust classifier.
+Across all 5 model variants, Config 1 achieves the highest AUROC. The label scope reduction (removing Lung Lesion, Fracture, No Finding) and simpler training setup (BCE, no sampler, no augmentation, longer patience) produce a cleaner, more robust classifier.
 
 ### Finding 5: Spatial Anatomy Contributes \~7 AUROC Points
 
@@ -350,7 +350,7 @@ DenseNet121 trained on CheXpert chest X-rays exhibits a systematic texture bias 
 
 **4. Implications for clinical AI robustness.** A model that relies heavily on texture for Pneumonia diagnosis may be vulnerable to acquisition protocol differences (different kV, grid, collimation settings alter the texture appearance of airspace disease while preserving its spatial distribution). A model that relies on shape for Cardiomegaly is inherently more robust to these confounders — the cardiac silhouette looks the same across scanners.
 
-**5. Training configuration matters for bias measurement.** Config 1's instability (focal + sampler double-correction) produces artificially low biased model scores that could lead to overestimating the shape penalty if not controlled for. Researchers should use a stable, single-strategy imbalance correction (Config 3 or Ed's config) to ensure the reliance ratios reflect the model's actual learned features rather than training artifacts.
+**5. Training configuration matters for bias measurement.** Config 1's instability (focal + sampler double-correction) produces artificially low biased model scores that could lead to overestimating the shape penalty if not controlled for. Researchers should use a stable, single-strategy imbalance correction (Config 1 or Config 4) to ensure the reliance ratios reflect the model's actual learned features rather than training artifacts.
 
 ### Suggested Additional Experiments (Future Work)
 
