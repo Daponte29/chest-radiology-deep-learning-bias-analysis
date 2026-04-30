@@ -97,7 +97,7 @@ LABEL_ORDER = [
     "Support Devices", "No Finding", "Pleural Effusion", "Pleural Other",
     "Lung Opacity", "Edema", "Consolidation", "Atelectasis",
     "Pneumothorax", "Cardiomegaly", "Pneumonia",
-    "Enlarged Cardiomediastinum", "Lung Lesion",
+    "Enlarged Cardiomediastinum", "Lung Lesion", "Fracture",
 ]
 
 
