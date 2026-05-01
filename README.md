@@ -14,13 +14,13 @@ We train **5 DenseNet121 models** on different versions of the CheXpert training
 set, then evaluate all of them on the same original validation/test set to
 isolate the effect of each bias.
 
-| Model | Training data | Bias introduced |
+| Model | Training data | Bias induced |
 |----|----|----|
 | `original` | Real chest X-rays | None — baseline |
-| `gb` | Gaussian-blurred X-rays | Shape (blur removes texture) |
-| `ps` | Patch-shuffled X-rays | Texture (shuffle destroys global shape) |
-| `ce` | Canny-edge X-rays | Shape (only structural edges remain) |
-| `pr` | Patch-rotated X-rays | Texture (local rotation disrupts shape) |
+| `gb` | Gaussian-blurred X-rays | Texture (blur-trained; model adapts to texture-free inputs) |
+| `ps` | Patch-shuffled X-rays | Texture (shuffle-trained; relies on local patch statistics) |
+| `ce` | Canny-edge X-rays | Shape (edge-trained; relies on structural edge features) |
+| `pr` | Patch-rotated X-rays | Shape (rotation-trained; adapts to shape-disrupted inputs) |
 
 After training, we run all 5 test sets through each biased model and compute
 **reliance ratios** (stylized AUC ÷ original AUC). A ratio > 1 on a matching
@@ -110,41 +110,40 @@ python -m src.data.style_transfer.generate_stylized
 
 Output suffixes written to `src/data/1/`:
 
-| Suffix | Transform | Bias type |
+| Suffix | Transform | Bias induced |
 |----|----|----|
-| `_gb.jpg` | Gaussian blur | Shape |
+| `_gb.jpg` | Gaussian blur | Texture |
 | `_ps.jpg` | Patch shuffle | Texture |
 | `_ce.jpg` | Canny edge | Shape |
-| `_pr.jpg` | Patch rotation | Texture |
+| `_pr.jpg` | Patch rotation | Shape |
 
 
 ---
 
 ## Training
 
-All 5 models use identical hyperparameters — only the training parquet and
-output directory differ per config.
+Training configs live in `src/configs/`. Each YAML specifies the training parquet,
+output directory, loss function, and sampler settings.
 
 ```bash
-# Baseline (already done if you have results/original/best_model.pth)
+# Baseline
 python -m src.train --config src/configs/train_original.yaml
 
 # 4 biased models — paste as one block to run sequentially overnight
-python -m src.train --config src/configs/train_gb.yaml; python -m src.train --config src/configs/train_ps.yaml; python -m src.train --config src/configs/train_ce.yaml; python -m src.train --config src/configs/train_pr.yaml
+python -m src.train --config src/configs/train_gb.yaml
+python -m src.train --config src/configs/train_ps.yaml
+python -m src.train --config src/configs/train_ce.yaml
+python -m src.train --config src/configs/train_pr.yaml
 ```
 
-Each run saves to its `output_dir`:
+Each run saves to the `output_dir` specified in its YAML:
 
 * `best_model.pth` — weights from the epoch with highest val AUROC
 * `training_history.parquet` — per-epoch loss, AUROC, and LR
 
-**Training config** (same for all 5):
-
-* Architecture: DenseNet121, ImageNet pretrained
-* Loss: BCEWithLogitsLoss (multi-label)
-* Optimiser: Adam (lr=1e-4, cosine LR decay)
-* Epochs: 10, Batch size: 16, Image size: 224×224
-* Validation: always on `valid_manifest.parquet` (original images)
+**Reference configs** (4 completed training runs) are archived under
+`src/configs/archive_results_configs/config_1/` through `config_4/`, each with
+its own YAML set and `results/` subfolder.
 
 
 ---
@@ -157,10 +156,11 @@ Runs all 4 biased models against all 5 test sets (20 forward passes total),
 then computes matching and opposing reliance ratios.
 
 ```bash
-python -m src.bias_eval
+# Against a specific config's checkpoints
+python -m src.bias_eval --results-dir src/configs/archive_results_configs/config_1/results
 ```
 
-Saves to `results/bias_eval/`:
+Saves to `<results-dir>/bias_eval/`:
 
 * `auc_matrix.parquet` — raw 4×5 AUROC grid
 * `reliance.json` — matching/opposing reliance ratios per model
@@ -172,19 +172,25 @@ Saves to `results/bias_eval/`:
 python -m src.evaluate --config src/configs/train_original.yaml
 ```
 
-Saves `results/original/test_results.json`.
+Saves `test_results.json` to the config's `output_dir`.
 
-### Plot training curves
+### Plotting
+
+All plots are generated from a single unified CLI:
 
 ```bash
-# Val AUROC — all 5 models on one chart
-python -m src.plot_curves
+# Training curves (val AUROC + loss) for one config
+python -m src.plot curves --results-dir src/configs/archive_results_configs/config_1/results
 
-# Train vs val loss — one subplot per model
-python -m src.plot_curves --loss
+# Multi-config AUROC comparison + heatmaps (auto-discovers all config_* folders)
+python -m src.plot compare
+
+# Matching vs opposing reliance for all configs with bias_eval output
+python -m src.plot reliance
 ```
 
-Saves to `results/training_curves.png` and `results/loss_curves.png`.
+All three subcommands default to `--archive src/configs/archive_results_configs`.
+Add `--no-show` to suppress interactive display (e.g. for headless runs).
 
 
 ---
@@ -223,39 +229,45 @@ Run from `src/notebooks/` with the `DL_PROJECT` kernel.
 
 ```
 ├── src/
-│   ├── train.py                    training script
-│   ├── evaluate.py                 single-model test set evaluation
-│   ├── bias_eval.py                full 4×5 bias evaluation matrix
-│   ├── plot_curves.py              training curve CLI
+│   ├── train.py                        training script
+│   ├── evaluate.py                     single-model test set evaluation
+│   ├── bias_eval.py                    full 4×5 bias evaluation matrix
+│   ├── plot.py                         unified plotting CLI (curves / compare / reliance)
 │   ├── configs/
-│   │   ├── train_original.yaml
+│   │   ├── train_original.yaml         active training configs (for new runs)
 │   │   ├── train_gb.yaml
 │   │   ├── train_ps.yaml
 │   │   ├── train_ce.yaml
-│   │   └── train_pr.yaml
+│   │   ├── train_pr.yaml
+│   │   └── archive_results_configs/    completed training runs (configs + results)
+│   │       ├── config_1/               Config 1 — BCE, no sampler, 11 labels
+│   │       │   ├── train_original.yaml
+│   │       │   ├── train_gb.yaml  ...
+│   │       │   └── results/
+│   │       │       ├── original/       best_model.pth, test_results.json
+│   │       │       ├── gb/ ps/ ce/ pr/
+│   │       │       └── bias_eval/      auc_matrix.parquet, reliance.json
+│   │       ├── config_2/               Config 2 — Focal γ=1.5 + sampler, 14 labels
+│   │       ├── config_3/               Config 3 — BCE + sampler, 14 labels
+│   │       └── config_4/               Config 4 — Focal γ=2.0, no sampler, 14 labels
 │   ├── data/
-│   │   ├── chexpert_dataset.py     PyTorch Dataset class
-│   │   ├── download_raw_data.py    Kaggle download script
-│   │   ├── generate_manifests.py   Parquet manifest generation
+│   │   ├── chexpert_dataset.py         PyTorch Dataset class
+│   │   ├── download_raw_data.py        Kaggle download script
+│   │   ├── generate_manifests.py       Parquet manifest generation
 │   │   ├── style_transfer/
 │   │   │   └── generate_stylized.py
-│   │   └── *.parquet               generated manifests (not committed)
+│   │   └── *.parquet                   generated manifests (not committed)
 │   ├── models/
-│   │   └── densenet.py             DenseNet121 classifier
+│   │   └── densenet.py                 DenseNet121 classifier
 │   ├── notebooks/
 │   │   ├── 01_data_exploration.ipynb
 │   │   ├── 02_training_smoke_test.ipynb
 │   │   └── 03_grad_cam_analysis.ipynb
 │   └── utils/
-│       ├── plotting.py             training curve plotting functions
-│       └── reliance.py             reliance ratio computation
-├── results/                        model checkpoints + metrics (not committed)
-│   ├── original/
-│   ├── gb/
-│   ├── ps/
-│   ├── ce/
-│   ├── pr/
-│   └── bias_eval/
+│       └── reliance.py                 reliance ratio computation
+├── results/
+│   ├── appendix/                       generated figures for paper appendix
+│   └── grad_cam/                       Grad-CAM visualizations
 ├── tests/
 │   └── test_chexpert_dataset.py
 └── pyproject.toml

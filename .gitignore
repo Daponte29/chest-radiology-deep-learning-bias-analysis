@@ -220,3 +220,13 @@ __marimo__/
 *.xlsx
 *.csv
 *.jpg
+
+# Model checkpoints (too large for git — store separately)
+*.pth
+
+# Large training outputs (parquet history files)
+training_history.parquet
+auc_matrix.parquet
+
+# Raw dataset images
+src/data/

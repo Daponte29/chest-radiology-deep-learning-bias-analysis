@@ -20,6 +20,7 @@
 6. [How Stylization Caused the Observed Patterns](#6-how-stylization-caused-the-observed-patterns)
 7. [Key Findings Summary](#7-key-findings-summary)
 8. [Implications for the Paper](#8-implications-for-the-paper)
+9. [Future Work](#9-future-work)
 
 
 ---
@@ -358,5 +359,61 @@ DenseNet121 trained on CheXpert chest X-rays exhibits a systematic texture bias 
 * Test `blend_ratio` ablation (0.3, 0.5, 0.7, 1.0) to understand how much real-image exposure is needed for biased models to remain evaluable
 * Compare DenseNet169 or ResNet50 to check whether deeper architectures show different bias profiles
 * Apply Grad-CAM to the original and biased models on the same test image to visually confirm where each model is looking for Cardiomegaly vs Pneumonia
+
+
+---
+
+## 9. Future Work
+
+### 9.1 Complete the Bias-Eval Cross-Test Matrix
+
+The current reliance ratios are computed from training on stylized images and evaluating on the **original test set only**. The full experiment would test each biased model against all 5 test sets (original, gb, ps, ce, pr), producing a 4×5 AUC matrix per config. This would quantify not just how much the bias hurt performance, but **whether the biased model actively exploits its matching test distribution** — a stronger definition of bias induction. `bias_eval.py` already supports this; it just needs to be run with the `--results-dir` flag pointing to each config's results folder.
+
+### 9.2 Blend Ratio Ablation
+
+All biased models in this study used `blend_ratio=0.5` (50% stylized + 50% original images per epoch). This was a pragmatic choice to keep biased models evaluable. A systematic ablation over `blend_ratio ∈ {0.2, 0.4, 0.6, 0.8, 1.0}` would reveal:
+
+* At what ratio does bias induction become detectable in the reliance metric?
+* At what ratio does model performance on the original test set degrade below clinical utility?
+* Whether there is an optimal blend that maximises the reliance gap while maintaining AUROC above the unbiased baseline.
+
+### 9.3 Alternative Backbone Architectures
+
+DenseNet121 was chosen for its benchmark status on CheXpert. However, the texture-bias finding may be architecture-specific. Testing the same stylization framework on:
+
+* **DenseNet169 / DenseNet201** — deeper dense networks; more parameters may allow richer feature separation
+* **ResNet50 / ResNet101** — residual skip connections vs dense connections; different inductive bias
+* **Vision Transformer (ViT-B/16)** — patch-based attention mechanisms that may inherently attend to shapes more than textures, consistent with findings by Naseer et al. (2021)
+
+would determine whether the observed texture dominance is a DenseNet property, a CNN property, or a CheXpert data property.
+
+### 9.4 Per-Label Threshold Optimisation
+
+All results use a single decision threshold of 0.5 applied uniformly across labels. In a clinical setting, different pathologies carry different costs for false positives vs false negatives. Optimising Youden's J statistic (sensitivity + specificity − 1) independently per label would:
+
+* Improve F1 and precision/recall metrics, particularly for rare labels (Lung Lesion, Enlarged CM) where 0.5 is too aggressive
+* Allow a fairer comparison of per-label AUROC vs per-label clinical utility
+* Potentially close the gap between biased and original model performance on shape-primary labels
+
+### 9.5 Stylization Quality and Clinical Realism
+
+The current transforms (Canny edge, Gaussian blur, patch shuffle, patch rotation) are computationally cheap and conceptually clean but are not clinically calibrated. More realistic stylization strategies to explore:
+
+* **Frequency-domain decomposition** (low-pass vs high-pass filtering via FFT) to cleanly separate spatial scales rather than relying on Gaussian blur radius
+* **Perlin noise texture overlays** to add non-structural texture without affecting anatomy
+* **Histogram equalization variants** (CLAHE) as a normalization-style texture suppression that radiologists actually encounter across scanner protocols
+* **Sinogram-domain stylization** to simulate acquisition protocol differences (kV, grid, collimation) at the raw detector level, which is the real source of texture variation in clinical deployment
+
+### 9.6 External Validation Dataset
+
+All results are from the CheXpert validation/test splits, which share the same acquisition protocol and patient population as the training data. Evaluating the trained models on an **out-of-distribution chest X-ray dataset** (e.g., NIH ChestX-ray14, MIMIC-CXR, or PadChest) would test whether:
+
+* The texture bias observed in-distribution survives domain shift
+* Shape-biased models (which our results suggest are underperforming in-distribution) may actually be **more robust** to domain shift — consistent with the hypothesis that shape features are more protocol-invariant than texture features
+* The GB−PS reliance gap (~0.07 AUROC points attributed to spatial anatomy) widens or narrows under distribution shift
+
+### 9.7 Clinical Subgroup Bias Analysis
+
+The current analysis treats the test set as a single distribution. CheXpert patients vary by age, sex, and imaging position (AP vs PA). A stratified analysis would determine whether the texture bias is **uniform across demographic subgroups** or whether certain groups are more affected — for example, whether pediatric patients or patients with atypical anatomical presentations are more vulnerable to shape-biased or texture-biased model failures. This connects the stylization framework directly to algorithmic fairness and clinical equity concerns.
 
 

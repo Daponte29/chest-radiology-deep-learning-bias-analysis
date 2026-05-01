@@ -104,7 +104,7 @@ def main():
     import argparse
     parser = argparse.ArgumentParser()
     parser.add_argument("--results-dir", default=None,
-                        help="Root results folder, e.g. results/nick. "
+                        help="Root results folder, e.g. src/configs/archive_results_configs/config_1/results. "
                              "Looks for checkpoints at <results-dir>/{gb,ps,ce,pr}/best_model.pth "
                              "and saves bias_eval output to <results-dir>/bias_eval/. "
                              "Defaults to results/")
