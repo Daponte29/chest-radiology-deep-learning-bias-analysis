@@ -105,7 +105,7 @@ Applies all four style-transfer transforms to the train and test images in-place
 (stylized files are saved alongside originals with a filename suffix).
 
 ```bash
-python -m src.data.style_transfer.generate_stylized
+python -m src.data.style_transfer_algos.generate_stylized
 ```
 
 Output suffixes written to `src/data/1/`:
@@ -254,7 +254,7 @@ Run from `src/notebooks/` with the `DL_PROJECT` kernel.
 │   │   ├── chexpert_dataset.py         PyTorch Dataset class
 │   │   ├── download_raw_data.py        Kaggle download script
 │   │   ├── generate_manifests.py       Parquet manifest generation
-│   │   ├── style_transfer/
+│   │   ├── style_transfer_algos/
 │   │   │   └── generate_stylized.py
 │   │   └── *.parquet                   generated manifests (not committed)
 │   ├── models/

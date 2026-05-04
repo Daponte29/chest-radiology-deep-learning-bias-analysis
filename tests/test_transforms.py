@@ -7,10 +7,10 @@ import numpy as np
 import pytest
 from PIL import Image
 
-from data.style_transfer.texture.gaussian_blur import apply as blur_apply
-from data.style_transfer.texture.patch_shuffle import apply as shuffle_apply
-from data.style_transfer.shape.canny_edge import apply as canny_apply
-from data.style_transfer.shape.patch_rotation import apply as rotation_apply
+from data.style_transfer_algos.texture.gaussian_blur import apply as blur_apply
+from data.style_transfer_algos.texture.patch_shuffle import apply as shuffle_apply
+from data.style_transfer_algos.shape.canny_edge import apply as canny_apply
+from data.style_transfer_algos.shape.patch_rotation import apply as rotation_apply
 
 
 TARGET_SIZE = (224, 224)
