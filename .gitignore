@@ -228,5 +228,3 @@ __marimo__/
 training_history.parquet
 auc_matrix.parquet
 
-# Raw dataset images
-src/data/

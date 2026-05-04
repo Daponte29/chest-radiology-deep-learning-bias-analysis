@@ -7,8 +7,6 @@ is disrupted while the global spatial layout of anatomical structures is
 preserved — nudging the model toward shape-level features.
 """
 
-import random
-
 import numpy as np
 from PIL import Image
 
@@ -16,17 +14,19 @@ TARGET_SIZE = (224, 224)
 PATCH_SIZE  = 32   # must evenly divide TARGET_SIZE
 
 
-def apply(img: Image.Image, patch_size: int = PATCH_SIZE) -> Image.Image:
+def apply(img: Image.Image, patch_size: int = PATCH_SIZE, seed: int | None = None) -> Image.Image:
     """
     Randomly rotate each non-overlapping patch by a multiple of 90°.
 
     Args:
         img:        Input image (any mode).
         patch_size: Side length of each square patch in pixels.
+        seed:       Random seed for reproducibility.
 
     Returns:
         Grayscale (mode 'L') patch-rotated image at TARGET_SIZE.
     """
+    rng = np.random.default_rng(seed)
     pil = img.convert("L")
     if pil.size != TARGET_SIZE:
         pil = pil.resize(TARGET_SIZE, Image.BILINEAR)
@@ -37,7 +37,7 @@ def apply(img: Image.Image, patch_size: int = PATCH_SIZE) -> Image.Image:
     for row in range(0, H, patch_size):
         for col in range(0, W, patch_size):
             patch  = gray[row : row + patch_size, col : col + patch_size]
-            k      = random.choice([1, 2, 3])   # 90°, 180°, or 270°
+            k      = rng.choice([1, 2, 3])      # 90°, 180°, or 270°
             canvas[row : row + patch_size, col : col + patch_size] = np.rot90(patch, k=k)
 
     return Image.fromarray(canvas)

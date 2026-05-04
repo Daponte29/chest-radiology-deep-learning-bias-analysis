@@ -45,11 +45,9 @@ class CheXpertDataset(Dataset):
 
     def __getitem__(self, idx):
         img_path = self.image_root_dir / self.paths[idx]
-        try:
-            image = Image.open(img_path).convert("RGB")
-        except FileNotFoundError:
-            print(f"Warning: Image not found at {img_path}")
-            return torch.zeros((3, 224, 224)), torch.zeros(len(self.target_cols))
+        if not img_path.exists():
+            raise FileNotFoundError(f"Image not found: {img_path}")
+        image = Image.open(img_path).convert("RGB")
 
         if self.transform:
             image = self.transform(image)

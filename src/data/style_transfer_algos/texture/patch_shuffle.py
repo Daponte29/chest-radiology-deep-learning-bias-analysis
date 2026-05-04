@@ -14,7 +14,7 @@ TARGET_SIZE = (224, 224)
 PATCH_SIZE  = 32   # must evenly divide TARGET_SIZE
 
 
-def apply(img: Image.Image, patch_size: int = PATCH_SIZE) -> Image.Image:
+def apply(img: Image.Image, patch_size: int = PATCH_SIZE, seed: int | None = None) -> Image.Image:
     """
     Randomly shuffle non-overlapping patches of a PIL image.
 
@@ -22,6 +22,7 @@ def apply(img: Image.Image, patch_size: int = PATCH_SIZE) -> Image.Image:
         img:        Input image (any mode).
         patch_size: Side length of each square patch in pixels.
                     Must evenly divide both image dimensions.
+        seed:       Random seed for reproducibility.
 
     Returns:
         Grayscale (mode 'L') patch-shuffled image at TARGET_SIZE.
@@ -45,7 +46,7 @@ def apply(img: Image.Image, patch_size: int = PATCH_SIZE) -> Image.Image:
     )
 
     # Permute patch order
-    patches = patches[np.random.permutation(n_patches)]
+    patches = patches[np.random.default_rng(seed).permutation(n_patches)]
 
     # Reconstruct image from shuffled patches
     result = (
