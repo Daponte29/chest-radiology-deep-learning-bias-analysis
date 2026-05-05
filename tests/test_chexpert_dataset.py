@@ -201,27 +201,22 @@ class TestGetItemFound:
 # ---------------------------------------------------------------------------
 
 class TestGetItemMissing:
-    def test_missing_image_returns_zero_tensor(self, parquet_path, tmp_path):
+    def test_missing_image_raises(self, parquet_path, tmp_path):
         ds = CheXpertDataset(str(parquet_path), str(tmp_path))
-        # Don't patch → Image.open will raise FileNotFoundError on the fake path
-        image, label = ds[0]
-        assert isinstance(image, torch.Tensor)
-        assert image.shape == (3, 224, 224)
-        assert torch.all(image == 0)
+        with pytest.raises(FileNotFoundError):
+            ds[0]
 
-    def test_missing_image_label_is_zero_tensor(self, parquet_path, tmp_path):
+    def test_missing_image_error_message(self, parquet_path, tmp_path):
         ds = CheXpertDataset(str(parquet_path), str(tmp_path))
-        _, label = ds[0]
-        assert isinstance(label, torch.Tensor)
-        assert label.shape == (len(DEFAULT_LABELS),)
-        assert torch.all(label == 0)
+        with pytest.raises(FileNotFoundError, match="Image not found"):
+            ds[0]
 
-    def test_missing_image_label_length_matches_target_cols(self, tmp_path):
+    def test_missing_image_custom_cols_raises(self, tmp_path):
         custom = ['Edema', 'Fracture']
         pq = _make_parquet(tmp_path, label_cols=custom)
         ds = CheXpertDataset(str(pq), str(tmp_path), target_cols=custom)
-        _, label = ds[0]
-        assert label.shape == (len(custom),)
+        with pytest.raises(FileNotFoundError):
+            ds[0]
 
 
 # ---------------------------------------------------------------------------
