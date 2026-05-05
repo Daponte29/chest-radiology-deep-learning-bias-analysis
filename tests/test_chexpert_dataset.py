@@ -3,6 +3,7 @@ Tests for src/data/chexpert_dataset.py — CheXpertDataset
 Run with: pytest src/tests/test_dataset.py -v
 """
 import io
+from contextlib import contextmanager
 import numpy as np
 import polars as pl
 import pytest
@@ -51,10 +52,13 @@ def _make_dummy_image(width: int = 64, height: int = 64) -> Image.Image:
     return Image.fromarray(arr, mode="RGB")
 
 
+@contextmanager
 def _patch_image_open(img: Image.Image | None = None):
-    """Context manager: patches PIL.Image.open to return a dummy image."""
+    """Context manager: patches Image.open and Path.exists so no real files are needed."""
     target_img = img or _make_dummy_image()
-    return patch("src.data.chexpert_dataset.Image.open", return_value=target_img)
+    with patch("src.data.chexpert_dataset.Image.open", return_value=target_img), \
+         patch("pathlib.Path.exists", return_value=True):
+        yield
 
 
 # ---------------------------------------------------------------------------
@@ -186,7 +190,8 @@ class TestGetItemFound:
         gray_img = Image.fromarray(np.zeros((32, 32), dtype=np.uint8), mode="L")
         tfm = transforms.Compose([transforms.Resize((32, 32)), transforms.ToTensor()])
         ds = CheXpertDataset(str(parquet_path), str(tmp_path), transform=tfm)
-        with patch("src.data.chexpert_dataset.Image.open", return_value=gray_img):
+        with patch("src.data.chexpert_dataset.Image.open", return_value=gray_img), \
+             patch("pathlib.Path.exists", return_value=True):
             image, _ = ds[0]
         assert image.shape[0] == 3  # RGB → 3 channels
 
