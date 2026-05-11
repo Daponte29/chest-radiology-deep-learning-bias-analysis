@@ -220,7 +220,28 @@ reliance ratio = AUC on stylized test set / AUC on original test set
 | `02_training_smoke_test.ipynb` | Sanity check — verify training loop on a small subset |
 | `03_grad_cam_analysis.ipynb` | Grad-CAM heatmaps — visualise what each model attends to |
 
-Run from `src/notebooks/` with the `DL_PROJECT` kernel.
+Run from `notebooks/` with the `DL_PROJECT` kernel.
+
+
+---
+
+## Inference UI (Streamlit)
+
+A self-contained web app for running inference on new chest X-rays.
+
+```bash
+streamlit run deploy/app.py
+```
+
+**Inputs:**
+- A trained model checkpoint (`.pth` from `src/configs/archive_results_configs/`)
+- A CSV manifest with a `Path` column (image filenames)
+- One or more JPEG X-ray images
+
+**Outputs:**
+- Per-label prediction probability table (colour-coded, downloadable as CSV)
+- Confidence bar chart per image
+- Grad-CAM attention overlay highlighting which regions drove each prediction
 
 
 ---
@@ -228,6 +249,13 @@ Run from `src/notebooks/` with the `DL_PROJECT` kernel.
 ## Project Structure
 
 ```
+├── deploy/
+│   ├── app.py                          Streamlit inference UI
+│   └── requirements.txt                deployment dependencies
+├── notebooks/
+│   ├── 01_data_exploration.ipynb
+│   ├── 02_training_smoke_test.ipynb
+│   └── 03_grad_cam_analysis.ipynb
 ├── src/
 │   ├── train.py                        training script
 │   ├── evaluate.py                     single-model test set evaluation
@@ -259,10 +287,6 @@ Run from `src/notebooks/` with the `DL_PROJECT` kernel.
 │   │   └── *.parquet                   generated manifests (not committed)
 │   ├── models/
 │   │   └── densenet.py                 DenseNet121 classifier
-│   ├── notebooks/
-│   │   ├── 01_data_exploration.ipynb
-│   │   ├── 02_training_smoke_test.ipynb
-│   │   └── 03_grad_cam_analysis.ipynb
 │   └── utils/
 │       └── reliance.py                 reliance ratio computation
 ├── results/

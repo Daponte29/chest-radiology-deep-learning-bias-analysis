@@ -29,3 +29,4 @@ dependencies:
       - pytest
       - black
       - flake8
+      - streamlit>=1.35

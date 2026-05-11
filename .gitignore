@@ -216,6 +216,7 @@ __marimo__/
 .vscode/
 
 # Ignore dataset and large outputs
+results/
 *.xls
 *.xlsx
 *.csv
