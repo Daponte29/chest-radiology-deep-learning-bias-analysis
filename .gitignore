@@ -208,7 +208,11 @@ __marimo__/
 
 
 # AI-generated files
-.claude 
+.claude
+
+# Local AI context files (not for version control)
+AI_CONTEXT.md
+CURRENT_TASK.md
 
 # Ignore dataset and large outputs
 
