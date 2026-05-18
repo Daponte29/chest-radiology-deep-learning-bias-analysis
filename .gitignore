@@ -220,15 +220,19 @@ CURRENT_TASK.md
 .vscode/
 
 # Ignore dataset and large outputs
-results/
+/results/
 *.xls
 *.xlsx
 *.csv
 *.jpg
+!deploy/assets/sample_xray.jpg
 
 # Model checkpoints (too large for git — store separately)
 *.pth
 # Exception: one checkpoint committed for Streamlit Cloud demo
+# (must un-ignore every parent directory in the chain for git to allow the file)
+!src/configs/archive_results_configs/config_1/results/
+!src/configs/archive_results_configs/config_1/results/original/
 !src/configs/archive_results_configs/config_1/results/original/best_model.pth
 
 # Large training outputs (parquet history files)
