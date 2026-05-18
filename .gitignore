@@ -228,6 +228,8 @@ results/
 
 # Model checkpoints (too large for git — store separately)
 *.pth
+# Exception: one checkpoint committed for Streamlit Cloud demo
+!src/configs/archive_results_configs/config_1/results/original/best_model.pth
 
 # Large training outputs (parquet history files)
 training_history.parquet

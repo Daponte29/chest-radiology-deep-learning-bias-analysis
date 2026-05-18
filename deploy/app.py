@@ -1,13 +1,11 @@
 """
 Streamlit inference app — chest X-ray multi-label classifier.
 
-Upload a chest X-ray and get per-label predictions + Grad-CAM attention map.
-
 Run with:
     streamlit run deploy/app.py
 """
 import os
-os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"  # fix: libiomp5md.dll / libomp.dll conflict on Windows
+os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
 
 import io
 import sys
@@ -43,6 +41,12 @@ PREPROCESS = transforms.Compose([
     transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225]),
 ])
 
+# Default checkpoint committed to repo for Streamlit Cloud
+_DEFAULT_CKPT = _REPO_ROOT / "src/configs/archive_results_configs/config_1/results/original/best_model.pth"
+
+# Sample image for the demo tab
+_SAMPLE_IMAGE = Path(__file__).parent / "assets" / "sample_xray.jpg"
+
 # Auto-discover all trained checkpoints in the archive
 _ARCHIVE = _REPO_ROOT / "src" / "configs" / "archive_results_configs"
 CHECKPOINTS: dict[str, Path] = {
@@ -52,9 +56,13 @@ CHECKPOINTS: dict[str, Path] = {
     if (variant / "best_model.pth").exists()
 }
 
+# Fall back to default if archive not present (e.g. Streamlit Cloud)
+if not CHECKPOINTS and _DEFAULT_CKPT.exists():
+    CHECKPOINTS = {"Config 1 — original (default)": _DEFAULT_CKPT}
+
 # ── Grad-CAM ──────────────────────────────────────────────────────────────────
 
-def _patch_densenet_relu(model: DenseNetClassifier) -> None:
+def _patch_densenet_relu(model):
     def _fwd(inner_self, x):
         features = inner_self.features(x)
         out = F.relu(features, inplace=False)
@@ -103,7 +111,7 @@ def overlay(pil_img, cam, alpha=0.5):
 # ── Model loading ─────────────────────────────────────────────────────────────
 
 @st.cache_resource(show_spinner=False)
-def load_model(ckpt_bytes: bytes, device_str: str):
+def load_model(ckpt_bytes, device_str):
     device = torch.device(device_str)
     ckpt = torch.load(io.BytesIO(ckpt_bytes), map_location=device, weights_only=False)
     cfg     = ckpt.get("config", {})
@@ -118,58 +126,23 @@ def load_model(ckpt_bytes: bytes, device_str: str):
     return model, list(labels), device
 
 
-# ── Page ──────────────────────────────────────────────────────────────────────
+# ── Inference helper ──────────────────────────────────────────────────────────
 
-st.set_page_config(page_title="Chest X-Ray Classifier", layout="wide")
-st.title("Chest X-Ray Classifier")
-st.caption("Upload a chest X-ray to get multi-label pathology predictions and a Grad-CAM attention map.")
+def run_inference(pil_img, model, labels, device):
+    tensor = PREPROCESS(pil_img).unsqueeze(0)
+    with torch.no_grad():
+        probs = torch.sigmoid(model(tensor.to(device))).squeeze().cpu().numpy()
+    return tensor, probs
 
-# Sidebar — model selection
-with st.sidebar:
-    st.header("Model")
 
-    if CHECKPOINTS:
-        selected = st.selectbox("Trained checkpoint", list(CHECKPOINTS.keys()))
-        ckpt_path = CHECKPOINTS[selected]
-        ckpt_bytes = ckpt_path.read_bytes()
-    else:
-        st.warning("No checkpoints found in archive. Upload one manually.")
-        ckpt_bytes = None
-
-    uploaded_ckpt = st.file_uploader("Or upload a .pth file", type=["pth"])
-    if uploaded_ckpt:
-        ckpt_bytes = uploaded_ckpt.getvalue()
-        selected   = uploaded_ckpt.name
-
-    device_str = "cuda" if torch.cuda.is_available() else "cpu"
-    st.caption(f"Device: **{device_str}**")
-
-# Main — image upload
-img_file = st.file_uploader(
-    "Upload a chest X-ray (JPEG / PNG)",
-    type=["jpg", "jpeg", "png"],
-)
-
-if img_file and ckpt_bytes:
-    pil_img = Image.open(img_file).convert("RGB")
-    tensor  = PREPROCESS(pil_img).unsqueeze(0)
-
-    with st.spinner("Running inference..."):
-        model, labels, device = load_model(ckpt_bytes, device_str)
-        with torch.no_grad():
-            probs = torch.sigmoid(model(tensor.to(device))).squeeze().cpu().numpy()
-
-    st.divider()
-
+def render_results(pil_img, tensor, probs, labels, device, model):
     col_img, col_chart, col_cam = st.columns([1, 1.6, 1.4])
 
     with col_img:
-        st.subheader("Input X-ray")
         st.image(pil_img.resize((280, 280)), use_container_width=True)
 
     with col_chart:
-        st.subheader("Label Predictions")
-        sorted_idx = np.argsort(probs)[::-1]
+        sorted_idx    = np.argsort(probs)[::-1]
         sorted_labels = [labels[i] for i in sorted_idx]
         sorted_probs  = probs[sorted_idx]
 
@@ -190,22 +163,85 @@ if img_file and ckpt_bytes:
         top_idx  = int(np.argmax(probs))
         top_lbl  = labels[top_idx]
         top_prob = probs[top_idx]
-        st.subheader("Grad-CAM")
-        st.caption(f"Top prediction: **{top_lbl}** ({top_prob:.1%})")
+        st.caption(f"Grad-CAM — top prediction: **{top_lbl}** ({top_prob:.1%})")
         with torch.enable_grad():
             cam = gradcam(model, tensor, top_idx, device)
         st.image(overlay(pil_img, cam), use_container_width=True, clamp=True)
         st.caption("Bright yellow = highest model attention · Dark = ignored")
 
-    # Top-3 summary below
     st.divider()
-    st.subheader("Top Predictions")
-    top3_idx = np.argsort(probs)[::-1][:3]
+    top3 = np.argsort(probs)[::-1][:3]
     cols = st.columns(3)
-    for col, i in zip(cols, top3_idx):
+    for col, i in zip(cols, top3):
         col.metric(labels[i], f"{probs[i]:.1%}")
 
-elif img_file and not ckpt_bytes:
-    st.warning("No model checkpoint available — select one from the sidebar.")
-else:
-    st.info("Upload a chest X-ray image to get started.")
+
+# ── Page ──────────────────────────────────────────────────────────────────────
+
+st.set_page_config(page_title="Chest X-Ray Classifier", layout="wide")
+st.title("Chest X-Ray Classifier")
+st.caption(
+    "DenseNet121 trained on CheXpert — multi-label pathology detection with Grad-CAM attention maps. "
+    "Part of a research project investigating texture vs shape bias in radiological AI."
+)
+
+device_str = "cuda" if torch.cuda.is_available() else "cpu"
+
+# Sidebar
+with st.sidebar:
+    st.header("Model")
+    if CHECKPOINTS:
+        selected  = st.selectbox("Checkpoint", list(CHECKPOINTS.keys()))
+        ckpt_path = CHECKPOINTS[selected]
+        ckpt_bytes = ckpt_path.read_bytes()
+    else:
+        st.error("No checkpoint found.")
+        st.stop()
+
+    uploaded_ckpt = st.file_uploader("Or upload a .pth file", type=["pth"])
+    if uploaded_ckpt:
+        ckpt_bytes = uploaded_ckpt.getvalue()
+
+    st.caption(f"Device: **{device_str}**")
+    st.divider()
+    st.markdown(
+        "**About**\n\n"
+        "This model was trained on the CheXpert chest X-ray dataset (185K images) "
+        "to classify 14 pathology labels. The project studies how texture vs shape "
+        "bias in training data affects diagnostic accuracy."
+    )
+
+# Load model once and cache
+with st.spinner("Loading model..."):
+    model, labels, device = load_model(ckpt_bytes, device_str)
+
+# Tabs
+tab_demo, tab_upload = st.tabs(["Live Demo", "Upload Your Own"])
+
+# ── Demo tab ──────────────────────────────────────────────────────────────────
+with tab_demo:
+    if not _SAMPLE_IMAGE.exists():
+        st.info("No sample image found at `deploy/assets/sample_xray.jpg`. Add one to enable the demo.")
+    else:
+        st.caption("Pre-loaded chest X-ray from the CheXpert test set — predictions run automatically.")
+
+        if "demo_results" not in st.session_state:
+            with st.spinner("Running demo inference..."):
+                pil_img = Image.open(_SAMPLE_IMAGE).convert("RGB")
+                tensor, probs = run_inference(pil_img, model, labels, device)
+                st.session_state["demo_results"] = (pil_img, tensor, probs)
+
+        pil_img, tensor, probs = st.session_state["demo_results"]
+        render_results(pil_img, tensor, probs, labels, device, model)
+
+# ── Upload tab ────────────────────────────────────────────────────────────────
+with tab_upload:
+    img_file = st.file_uploader("Upload a chest X-ray (JPEG / PNG)", type=["jpg", "jpeg", "png"])
+
+    if img_file:
+        pil_img = Image.open(img_file).convert("RGB")
+        with st.spinner("Running inference..."):
+            tensor, probs = run_inference(pil_img, model, labels, device)
+        render_results(pil_img, tensor, probs, labels, device, model)
+    else:
+        st.info("Upload a chest X-ray to get predictions.")
