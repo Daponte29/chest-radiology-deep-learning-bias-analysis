@@ -136,6 +136,11 @@ def run_inference(pil_img, model, labels, device):
 
 
 def render_results(pil_img, tensor, probs, labels, device, model):
+    top3 = np.argsort(probs)[::-1][:3]
+    cols = st.columns(3)
+    for col, i in zip(cols, top3):
+        col.metric(labels[i], f"{probs[i]:.1%}")
+
     col_img, col_chart, col_cam = st.columns([1, 1.6, 1.4])
 
     with col_img:
@@ -169,11 +174,6 @@ def render_results(pil_img, tensor, probs, labels, device, model):
         st.image(overlay(pil_img, cam), use_container_width=True, clamp=True)
         st.caption("Bright yellow = highest model attention · Dark = ignored")
 
-    st.divider()
-    top3 = np.argsort(probs)[::-1][:3]
-    cols = st.columns(3)
-    for col, i in zip(cols, top3):
-        col.metric(labels[i], f"{probs[i]:.1%}")
 
 
 # ── Page ──────────────────────────────────────────────────────────────────────
@@ -207,7 +207,7 @@ with st.sidebar:
     st.markdown(
         "**About**\n\n"
         "This model was trained on the CheXpert chest X-ray dataset (185K images) "
-        "to classify 14 pathology labels. The project studies how texture vs shape "
+        "to classify 14 pathology labels using a fine tuned DenseNet121 CNN model. The project studies how texture vs shape "
         "bias in training data affects diagnostic accuracy."
     )
 
