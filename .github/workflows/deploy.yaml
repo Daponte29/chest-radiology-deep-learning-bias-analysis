@@ -1,11 +1,7 @@
 name: Build & Deploy
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - "deploy/**"
-      - "src/**"
+  workflow_dispatch:   # manual only — requires AWS secrets to be configured first
 
 env:
   AWS_REGION: us-east-1
