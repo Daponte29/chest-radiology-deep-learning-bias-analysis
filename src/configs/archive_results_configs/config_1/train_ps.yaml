@@ -1,14 +1,14 @@
 ﻿# Experiment 3 â€” Patch Shuffle (texture bias): shuffled-patch train images, original validation.
-# Stylized images already generated in src/data/1 with _ps suffix.
+# Stylized images already generated in data/raw/1 with _ps suffix.
 
 seed: 42
 
 paths:
-  image_root:          src/data/1
-  train_parquet:       src/data/train_manifest_ps.parquet
-  train_parquet_blend: src/data/train_manifest.parquet   # original images for blending
-  valid_parquet:       src/data/valid_manifest.parquet
-  test_parquet:        src/data/test_manifest_ps.parquet
+  image_root:          data/raw/1
+  train_parquet:       data/processed/train_manifest_ps.parquet
+  train_parquet_blend: data/processed/train_manifest.parquet   # original images for blending
+  valid_parquet:       data/processed/valid_manifest.parquet
+  test_parquet:        data/processed/test_manifest_ps.parquet
   output_dir:    src/configs/archive_results_configs/config_1/results/ps/
 
 labels:

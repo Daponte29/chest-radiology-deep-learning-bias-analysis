@@ -51,7 +51,7 @@ SUFFIX_MAP = {
 
 KNOWN_SUFFIXES = set(SUFFIX_MAP.values())
 TARGET_SIZE    = (224, 224)
-IMAGE_ROOT     = Path(_PROJECT_ROOT) / "src" / "data" / "1"
+IMAGE_ROOT     = Path(_PROJECT_ROOT) / "data" / "raw" / "1"
 
 
 # ---------------------------------------------------------------------------

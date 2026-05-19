@@ -67,7 +67,7 @@ This downloads CheXpert-v1.0-small from Kaggle and places it under `src/data/1/`
 After download you should have:
 
 ```
-src/data/1/
+data/raw/1/
   train.csv
   valid.csv
   train/
@@ -84,7 +84,7 @@ patient-level train/valid split (seed=42, no patient leakage).
 python -m data.generate_manifests
 ```
 
-This writes to `src/data/`:
+This writes to `data/processed/`:
 
 ```
 train_manifest.parquet       valid_manifest.parquet      test_manifest.parquet
@@ -309,9 +309,7 @@ The app is also deployed on Streamlit Community Cloud — see the repo descripti
 │   │       ├── config_2/               Config 2 — Focal γ=1.5 + sampler, 14 labels
 │   │       ├── config_3/               Config 3 — BCE + sampler, 14 labels
 │   │       └── config_4/               Config 4 — Focal γ=2.0, no sampler, 14 labels
-│   ├── data/
-│   │   ├── 1/                          CheXpert images + CSVs (not committed — re-download with data/download_raw_data.py)
-│   │   └── *.parquet                   generated manifests (not committed — regenerate with data/generate_manifests.py)
+│   ├── data/                           gitignored — regenerate locally (see Setup)
 │   ├── models/
 │   │   └── densenet.py                 DenseNet121 classifier
 │   └── utils/

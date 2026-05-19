@@ -153,8 +153,8 @@ def _save(df: pl.DataFrame, path: Path, label: str) -> None:
 # ---------------------------------------------------------------------------
 
 if __name__ == "__main__":
-    base_dir = _PROJECT_ROOT / "src" / "data"  # manifests written alongside raw data
-    data_dir = base_dir / "1"                  # src/data/1/ — CheXpert images + CSVs
+    base_dir = _PROJECT_ROOT / "data" / "processed"  # manifests go to data/processed/
+    data_dir = _PROJECT_ROOT / "data" / "raw" / "1"  # data/raw/1/ — CheXpert images + CSVs
 
     train_csv = data_dir / "train.csv"
     valid_csv = data_dir / "valid.csv"

@@ -4,11 +4,11 @@
 seed: 42
 
 paths:
-  image_root:          src/data/1
-  train_parquet:       src/data/train_manifest_pr.parquet
-  train_parquet_blend: src/data/train_manifest.parquet
-  valid_parquet:       src/data/valid_manifest.parquet
-  test_parquet:        src/data/test_manifest_pr.parquet
+  image_root:          data/raw/1
+  train_parquet:       data/processed/train_manifest_pr.parquet
+  train_parquet_blend: data/processed/train_manifest.parquet
+  valid_parquet:       data/processed/valid_manifest.parquet
+  test_parquet:        data/processed/test_manifest_pr.parquet
   output_dir:    src/configs/archive_results_configs/config_2/results/pr/
 
 labels:

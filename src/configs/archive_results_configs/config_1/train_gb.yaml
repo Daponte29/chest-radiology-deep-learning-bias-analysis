@@ -1,14 +1,14 @@
 ﻿# Experiment 2 â€” Gaussian Blur (shape bias): blurred train images, original validation.
-# Stylized images already generated in src/data/1 with _gb suffix.
+# Stylized images already generated in data/raw/1 with _gb suffix.
 
 seed: 42
 
 paths:
-  image_root:          src/data/1
-  train_parquet:       src/data/train_manifest_gb.parquet
-  train_parquet_blend: src/data/train_manifest.parquet   # original images for blending
-  valid_parquet:       src/data/valid_manifest.parquet
-  test_parquet:        src/data/test_manifest_gb.parquet
+  image_root:          data/raw/1
+  train_parquet:       data/processed/train_manifest_gb.parquet
+  train_parquet_blend: data/processed/train_manifest.parquet   # original images for blending
+  valid_parquet:       data/processed/valid_manifest.parquet
+  test_parquet:        data/processed/test_manifest_gb.parquet
   output_dir:    src/configs/archive_results_configs/config_1/results/gb/
 
 labels:

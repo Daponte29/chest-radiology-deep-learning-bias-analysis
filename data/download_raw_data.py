@@ -3,7 +3,7 @@ import os
 from dotenv import load_dotenv
 import kagglehub  # make sure you have this installed
 
-def download_chexpert_dataset(target_dir: str = "src/data") -> Path:
+def download_chexpert_dataset(target_dir: str = "data/raw") -> Path:
     """
     Downloads CheXpert dataset from Kaggle and extracts it directly to target_dir.
 
