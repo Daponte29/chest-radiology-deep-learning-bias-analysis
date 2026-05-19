@@ -287,6 +287,7 @@ The app is also deployed on Streamlit Community Cloud — see the repo descripti
 │   ├── 02_training_smoke_test.ipynb
 │   └── 03_grad_cam_analysis.ipynb
 ├── src/
+│   ├── chexpert_dataset.py             PyTorch Dataset class
 │   ├── train.py                        training script
 │   ├── evaluate.py                     single-model test set evaluation
 │   ├── bias_eval.py                    full 4×5 bias evaluation matrix
@@ -308,11 +309,9 @@ The app is also deployed on Streamlit Community Cloud — see the repo descripti
 │   │       ├── config_2/               Config 2 — Focal γ=1.5 + sampler, 14 labels
 │   │       ├── config_3/               Config 3 — BCE + sampler, 14 labels
 │   │       └── config_4/               Config 4 — Focal γ=2.0, no sampler, 14 labels
-│   ├── chexpert_dataset.py             PyTorch Dataset class
 │   ├── data/
-│   │   └── 1/                          CheXpert images + CSVs (not committed)
-│   │       ├── train.csv / valid.csv
-│   │       └── *.parquet               generated manifests (not committed)
+│   │   ├── 1/                          CheXpert images + CSVs (not committed — re-download with data/download_raw_data.py)
+│   │   └── *.parquet                   generated manifests (not committed — regenerate with data/generate_manifests.py)
 │   ├── models/
 │   │   └── densenet.py                 DenseNet121 classifier
 │   └── utils/
@@ -322,8 +321,8 @@ The app is also deployed on Streamlit Community Cloud — see the repo descripti
 ├── .github/
 │   └── workflows/
 │       ├── ci.yml                      test + lint on every push
-│       ├── train.yaml                  manual SageMaker training dispatch
-│       └── deploy.yaml                 auto Docker build + ECR push on merge
+│       ├── train.yaml                  manual SageMaker training dispatch (workflow_dispatch)
+│       └── deploy.yaml                 manual Docker build + ECR push (workflow_dispatch — requires AWS secrets)
 ├── results/                            generated figures (not committed)
 ├── Makefile                            common commands (train, evaluate, app, docker-build …)
 ├── .env.example                        env var template (copy to .env, never commit)
