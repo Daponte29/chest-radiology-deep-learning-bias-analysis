@@ -1,0 +1,51 @@
+# Base training configuration — override per experiment
+seed: 42
+
+paths:
+  image_root:    src/data/1
+  train_parquet: src/data/train_manifest.parquet
+  valid_parquet: src/data/valid_manifest.parquet
+  test_parquet:  src/data/test_manifest.parquet
+  output_dir:    results/
+
+labels:
+  - Enlarged Cardiomediastinum
+  - Cardiomegaly
+  - Lung Opacity
+  - Lung Lesion
+  - Edema
+  - Consolidation
+  - Pneumonia
+  - Atelectasis
+  - Pneumothorax
+  - Pleural Effusion
+  - Pleural Other
+  - Fracture
+  - No Finding
+  - Support Devices
+
+model:
+  name:       densenet121
+  pretrained: true
+
+training:
+  loss:             bce
+  focal_gamma:      2.0
+  weighted_sampler: false
+  blend_ratio:      1.0
+  optimizer:        adam
+  learning_rate:    0.0001
+  betas:            [0.9, 0.999]
+  eps:              1.0e-8
+  weight_decay:     1.0e-5
+  scheduler:        cosine
+  eta_min:          1.0e-6
+  batch_size:       128
+  num_epochs:       15
+  img_size:         224
+  num_workers:      8
+  amp:              true
+  early_stopping_patience: 5
+  augmentation:
+    horizontal_flip: true
+    color_jitter:    0.1

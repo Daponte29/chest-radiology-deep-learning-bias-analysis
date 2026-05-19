@@ -81,7 +81,7 @@ Applies U-Zero labelling policy, frontal-view filtering, and a 97/3
 patient-level train/valid split (seed=42, no patient leakage).
 
 ```bash
-python -m src.data.generate_manifests
+python -m data.generate_manifests
 ```
 
 This writes to `src/data/`:
@@ -105,7 +105,7 @@ Applies all four style-transfer transforms to the train and test images in-place
 (stylized files are saved alongside originals with a filename suffix).
 
 ```bash
-python -m src.data.style_transfer_algos.generate_stylized
+python -m data.style_transfer_algos.generate_stylized
 ```
 
 Output suffixes written to `src/data/1/`:
@@ -233,15 +233,16 @@ A self-contained web app for running inference on new chest X-rays.
 streamlit run deploy/app.py
 ```
 
-**Inputs:**
-- A trained model checkpoint (`.pth` from `src/configs/archive_results_configs/`)
-- A CSV manifest with a `Path` column (image filenames)
-- One or more JPEG X-ray images
+**Tabs:**
+- **Live Demo** — pre-loaded sample X-ray with cached predictions (no upload needed)
+- **Upload Your Own** — drop any chest X-ray JPEG and get results instantly
 
-**Outputs:**
-- Per-label prediction probability table (colour-coded, downloadable as CSV)
-- Confidence bar chart per image
-- Grad-CAM attention overlay highlighting which regions drove each prediction
+**Outputs per inference:**
+- Top-3 predicted conditions with probability percentages
+- Confidence bar chart across all 14 CheXpert labels
+- Grad-CAM heatmap overlay showing which image regions drove the top prediction
+
+The app is also deployed on Streamlit Community Cloud — see the repo description for the live link.
 
 
 ---
@@ -249,9 +250,38 @@ streamlit run deploy/app.py
 ## Project Structure
 
 ```
+├── configs/
+│   └── base.yaml                       canonical hyperparameter config
+├── data/
+│   ├── download_raw_data.py            Kaggle download script
+│   ├── generate_manifests.py           Parquet manifest generation
+│   ├── style_transfer_algos/
+│   │   ├── generate_stylized.py        applies all 4 transforms to frontal images
+│   │   ├── texture/
+│   │   │   ├── gaussian_blur.py
+│   │   │   └── patch_shuffle.py
+│   │   └── shape/
+│   │       ├── canny_edge.py
+│   │       └── patch_rotation.py
+│   ├── raw/                            raw downloads (not committed)
+│   ├── processed/                      preprocessed data (not committed)
+│   └── external/                       third-party reference data (not committed)
 ├── deploy/
 │   ├── app.py                          Streamlit inference UI
-│   └── requirements.txt                deployment dependencies
+│   ├── assets/
+│   │   └── sample_xray.jpg             demo image (patient64711)
+│   ├── requirements.txt                deployment dependencies
+│   └── Dockerfile                      container image for cloud deployment
+├── infra/
+│   ├── terraform/
+│   │   ├── main.tf                     S3 bucket, ECR repo, SageMaker IAM role
+│   │   └── variables.tf
+│   └── cdk/
+│       └── stack.py                    AWS CDK equivalent (Python)
+├── monitoring/
+│   ├── drift.py                        KS / chi-squared drift detection
+│   ├── alerts.yaml                     alert thresholds (AUROC drop, latency)
+│   └── dashboard.json                  Grafana / CloudWatch panel scaffold
 ├── notebooks/
 │   ├── 01_data_exploration.ipynb
 │   ├── 02_training_smoke_test.ipynb
@@ -278,22 +308,25 @@ streamlit run deploy/app.py
 │   │       ├── config_2/               Config 2 — Focal γ=1.5 + sampler, 14 labels
 │   │       ├── config_3/               Config 3 — BCE + sampler, 14 labels
 │   │       └── config_4/               Config 4 — Focal γ=2.0, no sampler, 14 labels
+│   ├── chexpert_dataset.py             PyTorch Dataset class
 │   ├── data/
-│   │   ├── chexpert_dataset.py         PyTorch Dataset class
-│   │   ├── download_raw_data.py        Kaggle download script
-│   │   ├── generate_manifests.py       Parquet manifest generation
-│   │   ├── style_transfer_algos/
-│   │   │   └── generate_stylized.py
-│   │   └── *.parquet                   generated manifests (not committed)
+│   │   └── 1/                          CheXpert images + CSVs (not committed)
+│   │       ├── train.csv / valid.csv
+│   │       └── *.parquet               generated manifests (not committed)
 │   ├── models/
 │   │   └── densenet.py                 DenseNet121 classifier
 │   └── utils/
 │       └── reliance.py                 reliance ratio computation
-├── results/
-│   ├── appendix/                       generated figures for paper appendix
-│   └── grad_cam/                       Grad-CAM visualizations
 ├── tests/
 │   └── test_chexpert_dataset.py
+├── .github/
+│   └── workflows/
+│       ├── ci.yml                      test + lint on every push
+│       ├── train.yaml                  manual SageMaker training dispatch
+│       └── deploy.yaml                 auto Docker build + ECR push on merge
+├── results/                            generated figures (not committed)
+├── Makefile                            common commands (train, evaluate, app, docker-build …)
+├── .env.example                        env var template (copy to .env, never commit)
 └── pyproject.toml
 ```
 

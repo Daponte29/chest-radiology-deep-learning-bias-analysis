@@ -13,7 +13,7 @@ from PIL import Image
 from unittest.mock import patch, MagicMock
 from torchvision import transforms
 
-from data.chexpert_dataset import CheXpertDataset
+from src.chexpert_dataset import CheXpertDataset
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -56,7 +56,7 @@ def _make_dummy_image(width: int = 64, height: int = 64) -> Image.Image:
 def _patch_image_open(img: Image.Image | None = None):
     """Context manager: patches Image.open and Path.exists so no real files are needed."""
     target_img = img or _make_dummy_image()
-    with patch("src.data.chexpert_dataset.Image.open", return_value=target_img), \
+    with patch("src.chexpert_dataset.Image.open", return_value=target_img), \
          patch("pathlib.Path.exists", return_value=True):
         yield
 
@@ -190,7 +190,7 @@ class TestGetItemFound:
         gray_img = Image.fromarray(np.zeros((32, 32), dtype=np.uint8), mode="L")
         tfm = transforms.Compose([transforms.Resize((32, 32)), transforms.ToTensor()])
         ds = CheXpertDataset(str(parquet_path), str(tmp_path), transform=tfm)
-        with patch("src.data.chexpert_dataset.Image.open", return_value=gray_img), \
+        with patch("src.chexpert_dataset.Image.open", return_value=gray_img), \
              patch("pathlib.Path.exists", return_value=True):
             image, _ = ds[0]
         assert image.shape[0] == 3  # RGB → 3 channels

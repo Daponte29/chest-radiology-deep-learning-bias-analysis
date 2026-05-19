@@ -1,0 +1,20 @@
+# Inherits intent from base.yaml — override only what changes.
+experiment_name: experiment_01
+
+data:
+  raw_dir: data/raw
+  processed_dir: data/processed
+
+model:
+  name: my_model
+  # TODO: tune architecture params here
+
+train:
+  epochs: 100
+  batch_size: 64
+  lr: 3.0e-4
+  weight_decay: 1.0e-4
+  seed: 0
+  device: cuda
+  checkpoint_dir: checkpoints/experiment_01
+  log_every: 5

@@ -1,6 +1,6 @@
 """
 Pytest configuration — adds the project root to sys.path so that
-`from src.data.chexpert_dataset import ...` works without installing the package.
+`from src.chexpert_dataset import ...` works without installing the package.
 """
 import sys
 from pathlib import Path

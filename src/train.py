@@ -41,7 +41,7 @@ from torch.utils.data import ConcatDataset, DataLoader, Subset, WeightedRandomSa
 from torchvision import transforms
 from tqdm import tqdm
 
-from src.data.chexpert_dataset import CheXpertDataset
+from src.chexpert_dataset import CheXpertDataset
 from src.models.densenet import DenseNetClassifier
 
 

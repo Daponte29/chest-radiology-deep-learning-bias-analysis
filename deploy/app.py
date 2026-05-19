@@ -28,7 +28,7 @@ _REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
-from src.data.chexpert_dataset import CheXpertDataset  # noqa: E402
+from src.chexpert_dataset import CheXpertDataset  # noqa: E402
 from src.models.densenet import DenseNetClassifier      # noqa: E402
 
 # ── Constants ─────────────────────────────────────────────────────────────────
@@ -179,6 +179,32 @@ def render_results(pil_img, tensor, probs, labels, device, model):
 # ── Page ──────────────────────────────────────────────────────────────────────
 
 st.set_page_config(page_title="Chest X-Ray Classifier", layout="wide")
+
+st.markdown("""
+<style>
+h1, h2, h3, h4, h5, h6,
+.stCaption p,
+.stMarkdown p,
+.stMarkdown li,
+div[data-testid="stMetricLabel"] p,
+div[data-testid="stMetricValue"],
+.stTabs [data-baseweb="tab"] p,
+.stInfo p,
+label,
+[data-testid="stWidgetLabel"] p {
+    color: #0a2a6e !important;
+    font-weight: 700 !important;
+}
+.about-text, .about-text p, .about-text strong, .about-text * {
+    color: rgba(49, 51, 63, 0.9) !important;
+    font-weight: 400 !important;
+}
+.about-text strong {
+    font-weight: 600 !important;
+}
+</style>
+""", unsafe_allow_html=True)
+
 st.title("Chest X-Ray Classifier")
 st.caption(
     "DenseNet121 trained on CheXpert — multi-label pathology detection with Grad-CAM attention maps. "
@@ -205,10 +231,13 @@ with st.sidebar:
     st.caption(f"Device: **{device_str}**")
     st.divider()
     st.markdown(
-        "**About**\n\n"
+        '<div class="about-text">'
+        "<strong>About</strong><br><br>"
         "This model was trained on the CheXpert chest X-ray dataset (185K images) "
-        "to classify 14 pathology labels using a fine tuned DenseNet121 CNN model. The project studies how texture vs shape "
-        "bias in training data affects diagnostic accuracy."
+        "to classify 14 pathology labels using a fine tuned DenseNet121 CNN model. "
+        "The project studies how texture vs shape bias in training data affects diagnostic accuracy."
+        "</div>",
+        unsafe_allow_html=True,
     )
 
 # Load model once and cache

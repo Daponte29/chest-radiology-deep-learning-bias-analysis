@@ -1,0 +1,20 @@
+experiment_name: baseline
+
+data:
+  raw_dir: data/raw
+  processed_dir: data/processed
+  # TODO: add dataset-specific keys
+
+model:
+  name: my_model
+  # TODO: add architecture hyperparams
+
+train:
+  epochs: 50
+  batch_size: 32
+  lr: 1.0e-3
+  weight_decay: 1.0e-4
+  seed: 42
+  device: cuda          # cuda | cpu | mps
+  checkpoint_dir: checkpoints
+  log_every: 10

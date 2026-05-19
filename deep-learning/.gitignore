@@ -1,0 +1,45 @@
+# Environment
+.env
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+dist/
+build/
+
+# Data (keep folder structure, ignore contents)
+data/raw/*
+data/processed/*
+data/external/*
+!data/**/.gitkeep
+
+# Notebooks (strip output before committing, or ignore checkpoints)
+.ipynb_checkpoints/
+
+# Experiment artifacts
+runs/
+outputs/
+checkpoints/
+*.ckpt
+*.pt
+*.pth
+*.onnx
+
+# Logs
+*.log
+wandb/
+mlruns/
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Terraform state (use remote backend instead)
+infra/terraform/.terraform/
+infra/terraform/*.tfstate
+infra/terraform/*.tfstate.backup

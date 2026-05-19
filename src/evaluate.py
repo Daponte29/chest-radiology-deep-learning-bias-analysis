@@ -21,7 +21,7 @@ from torch.utils.data import DataLoader
 from torchvision import transforms
 from tqdm import tqdm
 
-from src.data.chexpert_dataset import CheXpertDataset
+from src.chexpert_dataset import CheXpertDataset
 from src.models.densenet import DenseNetClassifier
 
 IMAGENET_MEAN = [0.485, 0.456, 0.406]

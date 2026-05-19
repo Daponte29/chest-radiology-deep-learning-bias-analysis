@@ -19,7 +19,7 @@ import polars as pl
 import torch
 from torch.utils.data import DataLoader
 
-from src.data.chexpert_dataset import CheXpertDataset
+from src.chexpert_dataset import CheXpertDataset
 from src.evaluate import build_transform, run_evaluation
 from src.models.densenet import DenseNetClassifier
 from src.utils.reliance import compute_reliance

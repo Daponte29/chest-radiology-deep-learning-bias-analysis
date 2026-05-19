@@ -1,0 +1,14 @@
+# Alert thresholds for chest X-ray classifier monitoring
+
+drift:
+  covariate_p_threshold: 0.05      # KS test p-value below this triggers alert
+  label_p_threshold: 0.05          # chi-squared p-value threshold
+
+performance:
+  auroc_drop_abs: 0.05             # absolute AUROC drop from baseline triggers alert
+  latency_p99_ms: 3000             # p99 inference latency cap (CPU inference ~1-3s)
+
+notifications:
+  slack_webhook: ""                # TODO: set via secret / env var
+  pagerduty_key: ""                # TODO: set via secret / env var
+  email: ""
