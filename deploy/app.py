@@ -134,7 +134,7 @@ def run_inference(pil_img, model, labels, device):
         probs = torch.sigmoid(model(tensor.to(device))).squeeze().cpu().numpy()
     return tensor, probs
 
-
+# Creates the Streamlit UI Results section with predicted probabilities, bar chart, and Grad-CAM attention map.
 def render_results(pil_img, tensor, probs, labels, device, model):
     top3 = np.argsort(probs)[::-1][:3]
     cols = st.columns(3)
@@ -202,13 +202,21 @@ label,
 .about-text strong {
     font-weight: 600 !important;
 }
+.research-text, .research-text p, .research-text li,
+.research-text strong, .research-text * {
+    color: rgba(49, 51, 63, 0.9) !important;
+    font-weight: 400 !important;
+}
+.research-text strong { font-weight: 700 !important; }
+.research-text h4 { color: #0a2a6e !important; font-weight: 700 !important; }
 </style>
 """, unsafe_allow_html=True)
 
-st.title("Chest X-Ray Classifier")
+st.title("Chest X-Ray Pathology Classifier")
 st.caption(
-    "DenseNet121 trained on CheXpert — multi-label pathology detection with Grad-CAM attention maps. "
-    "Part of a research project investigating texture vs shape bias in radiological AI."
+    "Fine-tuned DenseNet121 trained on 185K chest X-rays from the CheXpert dataset — "
+    "multi-label pathology detection across 14 conditions with Grad-CAM explainability. "
+    "Part of a research study investigating texture vs shape bias in radiological deep learning."
 )
 
 device_str = "cuda" if torch.cuda.is_available() else "cpu"
@@ -233,9 +241,24 @@ with st.sidebar:
     st.markdown(
         '<div class="about-text">'
         "<strong>About</strong><br><br>"
-        "This model was trained on the CheXpert chest X-ray dataset (185K images) "
-        "to classify 14 pathology labels using a fine tuned DenseNet121 CNN model. "
-        "The project studies how texture vs shape bias in training data affects diagnostic accuracy."
+        "Fine-tuned <strong>DenseNet121</strong> on the <strong>CheXpert dataset</strong> "
+        "(224,316 chest X-rays, Stanford Medicine) for multi-label classification of "
+        "<strong>14 pathology conditions</strong> including Pleural Effusion, Atelectasis, "
+        "Cardiomegaly, Edema, and more.<br><br>"
+        "Trained with <strong>BCE loss</strong>, Adam optimizer, cosine LR scheduling, "
+        "and mixed-precision (AMP). Achieves <strong>0.84 mean AUROC</strong> on the "
+        "CheXpert 5-label competition set — competitive with published single-model baselines.<br><br>"
+        "Grad-CAM overlays highlight which image regions drove each prediction, "
+        "providing model explainability critical for clinical AI."
+        "</div>",
+        unsafe_allow_html=True,
+    )
+    st.divider()
+    st.markdown(
+        '<div class="about-text">'
+        "<strong>By Nicholas Daponte</strong><br>"
+        '<a href="https://github.com/Daponte29/chest-radiology-deep-learning-bias-analysis" '
+        'target="_blank">GitHub Repository</a>'
         "</div>",
         unsafe_allow_html=True,
     )
@@ -245,7 +268,7 @@ with st.spinner("Loading model..."):
     model, labels, device = load_model(ckpt_bytes, device_str)
 
 # Tabs
-tab_demo, tab_upload = st.tabs(["Live Demo", "Upload Your Own"])
+tab_demo, tab_upload, tab_research = st.tabs(["Live Demo", "Upload Your Own", "Research & Results"])
 
 # ── Demo tab ──────────────────────────────────────────────────────────────────
 with tab_demo:
@@ -274,3 +297,67 @@ with tab_upload:
         render_results(pil_img, tensor, probs, labels, device, model)
     else:
         st.info("Upload a chest X-ray to get predictions.")
+
+# ── Research tab ──────────────────────────────────────────────────────────────
+with tab_research:
+    st.markdown('<div class="research-text">', unsafe_allow_html=True)
+
+    st.subheader("Research Overview")
+    st.markdown(
+        "This project investigates whether **DenseNet121** trained on chest X-rays relies on "
+        "**texture** or **shape** features when making pathology predictions — a critical question "
+        "for clinical AI robustness. Methodology is adapted from "
+        "[Geirhos et al. (ICLR 2019)](https://arxiv.org/abs/1811.12231)."
+    )
+
+    st.subheader("Experimental Setup")
+    st.markdown("Five DenseNet121 models were trained on different versions of CheXpert, then evaluated on the same original test set:")
+
+    col1, col2 = st.columns(2)
+    with col1:
+        st.markdown("""
+| Model | Training Data | Bias Induced |
+|---|---|---|
+| **Original** | Real X-rays | None — baseline |
+| **Gaussian Blur** | Blurred X-rays | Texture |
+| **Patch Shuffle** | Patch-shuffled X-rays | Texture |
+| **Canny Edge** | Edge-only X-rays | Shape |
+| **Patch Rotation** | Patch-rotated X-rays | Shape |
+""")
+    with col2:
+        st.markdown("""
+**Key insight:** If a model trained on blurred images performs *better* on blurred test images
+than original test images, it learned texture shortcuts rather than clinically meaningful
+anatomical features.
+
+**Reliance Ratio** = AUC on stylized test set ÷ AUC on original test set
+
+- Ratio > 1 on matching style → bias confirmed
+- Ratio < 1 on opposing style → bias confirmed
+- Both near 1.0 → model learned real features
+""")
+
+    st.subheader("Model Performance — Config 1 Baseline")
+    m1, m2, m3 = st.columns(3)
+    m1.metric("Mean AUROC (competition labels)", "0.84")
+    m2.metric("Training Images", "185K")
+    m3.metric("Architecture", "DenseNet121")
+    st.caption(
+        "0.84 mean AUROC on the CheXpert 5-label competition set (Atelectasis, Cardiomegaly, "
+        "Consolidation, Edema, Pleural Effusion) — competitive with published leaderboard results "
+        "for single-model DenseNet baselines trained on the small dataset variant."
+    )
+
+    st.subheader("Technical Stack")
+    st.markdown("""
+- **Framework:** PyTorch 2.0 + torchvision
+- **Model:** DenseNet121 fine-tuned from ImageNet weights
+- **Dataset:** CheXpert-v1.0-small (Stanford Medicine)
+- **Training:** BCE loss · Adam · Cosine LR · AMP mixed precision · Early stopping
+- **Explainability:** Grad-CAM (gradient-weighted class activation maps)
+- **Style Transfers:** Gaussian blur · Patch shuffle · Canny edge · Patch rotation
+- **Evaluation:** AUROC per label · Reliance ratio analysis
+- **Deployment:** Streamlit · Docker · GitHub Actions CI
+""")
+
+    st.markdown('</div>', unsafe_allow_html=True)
